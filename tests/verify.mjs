@@ -274,6 +274,33 @@ cp "$in" "$out"
     });
 }
 
+await check('docs: README has no placeholders', () => {
+    const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+    assert.ok(!/<this repo>/i.test(readme), 'placeholder <this repo> found');
+    assert.ok(!/TODO/i.test(readme), 'TODO found');
+});
+
+await check('docs: index.html has no external requests', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    assert.ok(!/<script[^>]+src=["']https?:\/\//i.test(html), 'external script');
+    assert.ok(!/<link[^>]+href=["']https?:\/\//i.test(html), 'external stylesheet');
+});
+
+if (process.platform !== 'win32') {
+    await check('docs: documented commands respond to --help', () => {
+        const js = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'subtranslate.js'), '--help'], { encoding: 'utf8' });
+        assert.equal(js.status, 0, js.stderr);
+        for (const file of ['bin/subfind', 'bin/subsync-en', 'bin/subtr']) {
+            const r = spawnSync('sh', [path.join(ROOT, file), '--help'], { encoding: 'utf8' });
+            assert.equal(r.status, 0, `${file}: ${r.stderr}`);
+        }
+    });
+}
+
+await check('docs: quick-start fixture exists', () => {
+    assert.ok(fs.existsSync(path.join(ROOT, 'examples', 'hello.en.srt')));
+});
+
 if (failures) {
     console.log(`\n${failures} failure(s)`);
     process.exitCode = 1;

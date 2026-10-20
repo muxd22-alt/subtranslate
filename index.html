@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>subtranslate</title>
+<style>
+:root{--bg:#f6f7fb;--fg:#1b1f2a;--card:#fff;--accent:#2563eb;--muted:#5b6375}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1117;--fg:#e6e8ee;--card:#181b23;--accent:#60a5fa;--muted:#9aa3b2}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg);line-height:1.6}
+main{max-width:960px;margin:0 auto;padding:24px}
+h1{margin:0 0 8px}h2{margin-top:32px}
+.card{background:var(--card);border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+pre{background:var(--card);padding:12px;border-radius:8px;overflow:auto}
+button{cursor:pointer;padding:6px 10px;border:1px solid var(--muted);background:var(--card);color:var(--fg);border-radius:6px}
+.tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.copy{float:right}
+details{margin:8px 0}
+.ar{font-family:system-ui;direction:rtl;text-align:right}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>subtranslate <span class="badge">offline</span></h1>
+<p>Offline English to Arabic subtitle translation on device.</p>
+
+<section class="card">
+<h2>Install</h2>
+<div class="tabs">
+<button class="active" data-tab="termux">Termux</button>
+<button data-tab="linux">Linux</button>
+<button data-tab="wsl">WSL</button>
+</div>
+<div id="termux"><pre><code>npm install -g subtranslate</code></pre><button class="copy" data-copy="npm install -g subtranslate">Copy</button></div>
+<div id="linux" hidden><pre><code>npm install -g subtranslate</code></pre><button class="copy" data-copy="npm install -g subtranslate">Copy</button></div>
+<div id="wsl" hidden><pre><code>npm install -g subtranslate</code></pre><button class="copy" data-copy="npm install -g subtranslate">Copy</button></div>
+</section>
+
+<section class="card">
+<h2>Quick start</h2>
+<pre><code>subtranslate examples/hello.en.srt "Hello"</code></pre>
+</section>
+
+<section class="card">
+<h2>Commands</h2>
+<table>
+<tr><th>Command</th><th>Purpose</th></tr>
+<tr><td>subtranslate</td><td>Translate an English SRT to Arabic</td></tr>
+<tr><td>subtr</td><td>Find and translate a movie subtitle</td></tr>
+<tr><td>subfind</td><td>Download a subtitle next to a video</td></tr>
+<tr><td>subsync-en</td><td>Re-time an English subtitle</td></tr>
+</table>
+</section>
+
+<section class="card">
+<h2>Good trees</h2>
+<pre>Movies/Movie (2010)/Movie (2010).en.srt -> Movie (2010).ar.tran.srt</pre>
+<h2>Bad trees</h2>
+<pre>Movies/Movie (2010)/Movie (2010).ar.sub.srt is a human track, never overwritten</pre>
+</section>
+
+<section class="card">
+<h2>Output</h2>
+<p><code>.en.srt</code> becomes <code>.ar.tran.srt</code>. Untagged <code>.srt</code> becomes <code>.ar.tran.srt</code>. <code>.eng.forced</code> normalizes to one <code>.ar.tran.srt</code>. Exit code 4 = validator rejection; use <code>--reject-out</code>.</p>
+</section>
+
+<section class="card">
+<h2>Troubleshooting</h2>
+<details><summary>Model missing</summary><p>Run <code>subtranslate --fetch-model</code>.</p></details>
+<details><summary>Validator rejection</summary><p>Inspect with <code>--reject-out</code>.</p></details>
+</section>
+
+<section class="card">
+<h2>Links</h2>
+<p><a href="https://github.com/muxd22-alt/subtranslate">GitHub</a></p>
+</section>
+
+<section class="card">
+<h2>Arabic example</h2>
+<p class="ar" lang="ar" dir="rtl">مرحبا بالعالم</p>
+</section>
+
+<section class="card">
+<h2>Filename checker</h2>
+<input id="fn" placeholder="movie.en.srt">
+<pre id="out"></pre>
+</section>
+
+</main>
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    ['termux','linux','wsl'].forEach(t=>{document.getElementById(t).hidden = t!==b.dataset.tab;});
+  });
+});
+document.querySelectorAll('.copy').forEach(b=>{
+  b.addEventListener('click',()=>{navigator.clipboard.writeText(b.dataset.copy);});
+});
+function checkName(n){
+  if(n.endsWith('.en.srt')) return n.replace(/\.en\.srt$/,'.ar.tran.srt');
+  if(n.endsWith('.srt')) return n.replace(/\.srt$/,'.ar.tran.srt');
+  return n;
+}
+const fn=document.getElementById('fn');
+const out=document.getElementById('out');
+fn.addEventListener('input',()=>{out.textContent=checkName(fn.value);});
+</script>
+</body>
+</html>
