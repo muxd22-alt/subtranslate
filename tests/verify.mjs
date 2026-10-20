@@ -190,6 +190,44 @@ cp "$in" "$out"
         assert.equal(fs.readFileSync(en, 'utf8'), '1\n00:00:01,000 --> 00:00:02,000\nHello\n');
         assert.deepEqual(fs.readdirSync(dir).filter(n => n.includes('.part')), []);
     });
+
+    await check('subsync-en honors --out for an .srt input', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'subtranslate-sync-out-'));
+        const bin = path.join(dir, 'bin');
+        fs.mkdirSync(bin);
+        const input = path.join(dir, 'Movie.en.srt');
+        const output = path.join(dir, 'Movie.synced.srt');
+        const ref = path.join(dir, 'ref.ar.srt');
+        const original = '1\n00:00:01,000 --> 00:00:02,000\nHello\n';
+        fs.writeFileSync(input, original);
+        fs.writeFileSync(ref, original);
+        const fake = path.join(bin, 'ffsubsync');
+        fs.writeFileSync(fake, `#!/bin/sh
+in=
+out=
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -i) in=$2; shift 2 ;;
+        -o) out=$2; shift 2 ;;
+        *) shift ;;
+    esac
+done
+cp "$in" "$out"
+`);
+        fs.chmodSync(fake, 0o755);
+        const r = spawnSync('sh', [
+            path.join(ROOT, 'bin', 'subsync-en'),
+            '--ref', ref,
+            '--out', output,
+            input,
+        ], {
+            encoding: 'utf8',
+            env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
+        });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(fs.readFileSync(input, 'utf8'), original);
+        assert.equal(fs.readFileSync(output, 'utf8'), original);
+    });
 }
 
 if (failures) {

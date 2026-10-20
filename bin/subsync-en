@@ -62,17 +62,15 @@ input=$1
 
 case "$input" in
     *.srt|*.SRT)
-        target=$input
+        source=$input
+        target=${out:-$input}
         base=$(st_video_base "$input")
         ;;
     *)
         base=$(st_video_base "$input")
-        if [ -n "$out" ]; then
-            target=$out
-        else
-            info=$(st_find_en "$base") || { echo "subsync-en: no English subtitle next to $input (use --ref or --out)" >&2; exit 3; }
-            target=${info%|*}
-        fi
+        info=$(st_find_en "$base") || { echo "subsync-en: no English subtitle next to $input (use --out for a missing sidecar)" >&2; exit 3; }
+        source=${info%|*}
+        target=${out:-$source}
         ;;
 esac
 
@@ -88,17 +86,17 @@ if ! st_have ffsubsync; then
 fi
 
 if [ "$dry" -eq 1 ]; then
-    echo "subsync-en: ffsubsync $ref -i $target -o $target"
+    echo "subsync-en: ffsubsync $ref -i $source -o $target"
     exit 0
 fi
 
 tmp="$target.$$.tmp.srt"
 rm -f "$tmp"
 if st_have timeout; then
-    timeout "$limit" ffsubsync "$ref" -i "$target" -o "$tmp"
+    timeout "$limit" ffsubsync "$ref" -i "$source" -o "$tmp"
     rc=$?
 else
-    ffsubsync "$ref" -i "$target" -o "$tmp"
+    ffsubsync "$ref" -i "$source" -o "$tmp"
     rc=$?
 fi
 
