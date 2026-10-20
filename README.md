@@ -16,19 +16,31 @@ Arabic:
 ## Quick start
 
 ```
-npm install -g subtranslate
+subtranslate --fetch-model
 subtranslate examples/hello.en.srt "Hello"
 ```
 
+The model is ~34 MB and is fetched once. After that everything runs offline.
+
 ## Install
 
-Termux / Linux / WSL:
+Termux:
+```
+pkg install nodejs-lts git
+git clone https://github.com/muxd22-alt/subtranslate.git
+cd subtranslate
+sh install.sh
+```
+
+Linux / WSL:
 ```
 git clone https://github.com/muxd22-alt/subtranslate.git
 cd subtranslate
-npm install
-npm link
+sh install.sh
 ```
+
+`install.sh` installs the dependencies, fetches the model, links `subtranslate`
+and puts `subfind`, `subsync-en` and `subtr` into `$PREFIX/bin`.
 
 Or via npm:
 ```

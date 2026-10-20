@@ -5,26 +5,48 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>subtranslate</title>
 <style>
-:root{--bg:#f6f7fb;--fg:#1b1f2a;--card:#fff;--accent:#2563eb;--muted:#5b6375}
-@media (prefers-color-scheme: dark){:root{--bg:#0f1117;--fg:#e6e8ee;--card:#181b23;--accent:#60a5fa;--muted:#9aa3b2}}
+:root{--bg:#f6f7fb;--fg:#1b1f2a;--card:#fff;--accent:#2563eb;--muted:#5b6375;--line:#e4e7ee}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1117;--fg:#e6e8ee;--card:#181b23;--accent:#60a5fa;--muted:#9aa3b2;--line:#252a35}}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg);line-height:1.6}
-main{max-width:960px;margin:0 auto;padding:24px}
-h1{margin:0 0 8px}h2{margin-top:32px}
-.card{background:var(--card);border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+main{max-width:960px;margin:0 auto;padding:24px 20px 64px}
+h1{margin:0 0 8px;font-size:1.9rem}h2{margin-top:0;font-size:1.25rem}h3{margin:18px 0 6px;font-size:1rem}
+p{margin:8px 0}
+.lede{font-size:1.05rem;color:var(--muted);margin:0 0 4px}
+.card{background:var(--card);border-radius:12px;padding:16px 18px;margin:14px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-pre{background:var(--card);padding:12px;border-radius:8px;overflow:auto}
-button{cursor:pointer;padding:6px 10px;border:1px solid var(--muted);background:var(--card);color:var(--fg);border-radius:6px}
+pre{background:var(--card);border:1px solid var(--line);padding:12px;border-radius:8px;overflow:auto;margin:8px 0;font-size:.92rem;line-height:1.45}
+p code,li code,td code{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.9em}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+button{cursor:pointer;padding:6px 12px;border:1px solid var(--muted);background:var(--card);color:var(--fg);border-radius:6px;font:inherit;font-size:.92rem}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.copy{float:right}
-details{margin:8px 0}
-.ar{font-family:system-ui;direction:rtl;text-align:right}
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px}
+.copy{float:right;margin-top:-34px;margin-right:2px}
+details{margin:8px 0;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--card)}
+summary{cursor:pointer;font-weight:600}
+.ar{font-family:system-ui,direction:rtl;text-align:right;font-size:1.2rem}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;vertical-align:middle}
+.ok{color:#16a34a}.warn{color:#d97706}
+.tree .bad{border-left:3px solid var(--warn);padding-left:10px}
+.tree .good{border-left:3px solid var(--ok);padding-left:10px}
+ul{padding-left:20px}li{margin:4px 0}
+a{color:var(--accent)}
 </style>
 </head>
 <body>
 <main>
 <h1>subtranslate <span class="badge">offline</span></h1>
-<p>Offline English to Arabic subtitle translation on device.</p>
+<p class="lede">Offline English&nbsp;&rarr;&nbsp;Arabic subtitle translation, on device. One model download, then no network at all.</p>
+
+<section class="card">
+<h2>What it does</h2>
+<p>It reads an English <code>.srt</code>, translates it to Arabic with a local
+Bergamot/Marian model, validates the result, and writes it next to the source as
+<code>.ar.tran.srt</code>. The machine track is kept separate from a human or
+downloaded Arabic track (<code>.ar.sub.srt</code>), so Jellyfin and Plex can show
+both without either overwriting the other.</p>
+</section>
 
 <section class="card">
 <h2>Install</h2>
@@ -32,82 +54,180 @@ details{margin:8px 0}
 <button class="active" data-tab="termux">Termux</button>
 <button data-tab="linux">Linux</button>
 <button data-tab="wsl">WSL</button>
+<button data-tab="npm">npm</button>
 </div>
-<div id="termux"><pre><code>npm install -g subtranslate</code></pre><button class="copy" data-copy="npm install -g subtranslate">Copy</button></div>
-<div id="linux" hidden><pre><code>npm install -g subtranslate</code></pre><button class="copy" data-copy="npm install -g subtranslate">Copy</button></div>
-<div id="wsl" hidden><pre><code>npm install -g subtranslate</code></pre><button class="copy" data-copy="npm install -g subtranslate">Copy</button></div>
+<div id="termux">
+<pre><code>pkg install nodejs-lts git
+git clone https://github.com/muxd22-alt/subtranslate.git
+cd subtranslate
+sh install.sh</code></pre>
+<button class="copy" data-copy="pkg install nodejs-lts git&#10;git clone https://github.com/muxd22-alt/subtranslate.git&#10;cd subtranslate&#10;sh install.sh">Copy</button>
+<p><code>install.sh</code> installs the dependencies, downloads the en&rarr;ar model
+(~34&nbsp;MB, once), links <code>subtranslate</code> and puts
+<code>subfind</code>, <code>subsync-en</code> and <code>subtr</code> into
+<code>$PREFIX/bin</code>.</p>
+</div>
+<div id="linux" hidden>
+<pre><code>git clone https://github.com/muxd22-alt/subtranslate.git
+cd subtranslate
+sh install.sh</code></pre>
+<button class="copy" data-copy="git clone https://github.com/muxd22-alt/subtranslate.git&#10;cd subtranslate&#10;sh install.sh">Copy</button>
+</div>
+<div id="wsl" hidden>
+<pre><code>git clone https://github.com/muxd22-alt/subtranslate.git
+cd subtranslate
+sh install.sh</code></pre>
+<button class="copy" data-copy="git clone https://github.com/muxd22-alt/subtranslate.git&#10;cd subtranslate&#10;sh install.sh">Copy</button>
+<p>If <code>npm link</code> needs root, <code>install.sh</code> falls back to
+<code>npm install -g .</code> on its own.</p>
+</div>
+<div id="npm" hidden>
+<pre><code>npm install -g subtranslate</code></pre>
+<button class="copy" data-copy="npm install -g subtranslate">Copy</button>
+<p>The npm package ships the same model fetch; run
+<code>subtranslate --fetch-model</code> once after installing.</p>
+</div>
 </section>
 
 <section class="card">
 <h2>Quick start</h2>
-<pre><code>subtranslate examples/hello.en.srt "Hello"</code></pre>
+<pre><code># 1. fetch the model once (~34 MB). install.sh already did this.
+subtranslate --fetch-model
+
+# 2. translate a file
+subtranslate examples/hello.en.srt "Hello"
+
+# 3. the machine track is written next to the source
+cat examples/hello.ar.tran.srt</code></pre>
+<button class="copy" data-copy="subtranslate --fetch-model&#10;subtranslate examples/hello.en.srt &quot;Hello&quot;">Copy</button>
+<p>After the model is on disk the tool never touches the network again.</p>
 </section>
 
 <section class="card">
 <h2>Commands</h2>
 <table>
 <tr><th>Command</th><th>Purpose</th></tr>
-<tr><td>subtranslate</td><td>Translate an English SRT to Arabic</td></tr>
-<tr><td>subtr</td><td>Find and translate a movie subtitle</td></tr>
-<tr><td>subfind</td><td>Download a subtitle next to a video</td></tr>
-<tr><td>subsync-en</td><td>Re-time an English subtitle</td></tr>
+<tr><td><code>subtranslate</code></td><td>Translate an English SRT to Arabic</td></tr>
+<tr><td><code>subtr</code></td><td>Find and translate a movie subtitle</td></tr>
+<tr><td><code>subfind</code></td><td>Download a subtitle next to a video</td></tr>
+<tr><td><code>subsync-en</code></td><td>Re-time an English subtitle</td></tr>
 </table>
+<p><code>subtranslate --help</code> prints the same table plus every option.</p>
 </section>
 
 <section class="card">
-<h2>Good trees</h2>
-<pre>Movies/Movie (2010)/Movie (2010).en.srt -> Movie (2010).ar.tran.srt</pre>
-<h2>Bad trees</h2>
-<pre>Movies/Movie (2010)/Movie (2010).ar.sub.srt is a human track, never overwritten</pre>
+<h2>Folder layouts</h2>
+<h3 class="tree good">Good movie tree</h3>
+<pre>Movies/Movie (2010)/Movie (2010).en.srt
+  -&gt; Movies/Movie (2010)/Movie (2010).ar.tran.srt</pre>
+<h3 class="tree good">Good TV tree</h3>
+<pre>TV/Show/Season 1/Show.s01e01.en.srt
+  -&gt; TV/Show/Season 1/Show.s01e01.ar.tran.srt</pre>
+<h3 class="tree bad">Bad movie tree</h3>
+<pre>Movies/Movie (2010)/Movie (2010).ar.sub.srt</pre>
+<p>A human (or downloaded) Arabic track. It is <strong>never overwritten</strong>:
+the translation goes to <code>Movie (2010).ar.tran.srt</code> next to it, and
+Jellyfin shows both tracks as Arabic.</p>
+<h3 class="tree bad">Bad TV tree</h3>
+<pre>TV/Show/Season 1/Show.s01e01.srt</pre>
+<p>Untagged, so the language is ambiguous: it still becomes
+<code>Show.s01e01.ar.tran.srt</code>, but the source is not obviously English
+and a sibling <code>.en.srt</code> is the clearer layout.</p>
 </section>
 
 <section class="card">
-<h2>Output</h2>
-<p><code>.en.srt</code> becomes <code>.ar.tran.srt</code>. Untagged <code>.srt</code> becomes <code>.ar.tran.srt</code>. <code>.eng.forced</code> normalizes to one <code>.ar.tran.srt</code>. Exit code 4 = validator rejection; use <code>--reject-out</code>.</p>
+<h2>Output rules</h2>
+<ul>
+<li><code>.en.srt</code> &rarr; <code>.ar.tran.srt</code></li>
+<li>untagged <code>.srt</code> &rarr; <code>.ar.tran.srt</code></li>
+<li><code>.eng.forced</code>, <code>.en.sdh</code>, <code>.english.srt</code> normalise to one <code>.ar.tran.srt</code></li>
+<li>an explicit <code>--out</code> always wins</li>
+<li><code>.ar.sub.srt</code> is the human track, <code>.ar.tran.srt</code> is the machine translation &mdash; they never collide</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Validation and exit codes</h2>
+<p>The translation is checked before the file is written: it must really be
+Arabic, must not be half translated, and must cover the source. A rejected run
+exits <code>4</code> and writes nothing.</p>
+<table>
+<tr><th>Check</th><th>Default</th><th>Rejects</th></tr>
+<tr><td>Arabic letter ratio</td><td><code>0.88</code></td><td>English passthrough</td></tr>
+<tr><td>Arabic cue ratio</td><td><code>0.90</code></td><td>half-translated files</td></tr>
+<tr><td>English-only cues</td><td>at most <code>0.10</code></td><td>blocks of untouched English</td></tr>
+<tr><td>source cue coverage</td><td><code>0.85</code></td><td>output missing many source cues</td></tr>
+</table>
+<p>Keep a rejected translation for inspection with
+<code>--reject-out &lt;path&gt;</code>.</p>
+</section>
+
+<section class="card">
+<h2>Performance</h2>
+<p>Translation runs on <code>4</code> worker threads in waves of
+<code>200</code> cues (<code>--workers</code>, <code>--chunk</code>). The model
+is ~34&nbsp;MB on disk and runs fully offline, so this is the heaviest step on
+the device. See <a href="docs/model-parallelism.md">docs/model-parallelism.md</a>.</p>
+</section>
+
+<section class="card">
+<h2>Filename checker</h2>
+<p>Type a subtitle filename to see where its machine translation lands.</p>
+<input id="fn" placeholder="Movie (2010).en.srt" style="width:100%;max-width:420px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)">
+<pre id="out"></pre>
+<pre id="note"></pre>
 </section>
 
 <section class="card">
 <h2>Troubleshooting</h2>
 <details><summary>Model missing</summary><p>Run <code>subtranslate --fetch-model</code>.</p></details>
-<details><summary>Validator rejection</summary><p>Inspect with <code>--reject-out</code>.</p></details>
-</section>
-
-<section class="card">
-<h2>Links</h2>
-<p><a href="https://github.com/muxd22-alt/subtranslate">GitHub</a></p>
+<details><summary>Validator rejection (exit 4)</summary><p>Inspect with <code>--reject-out</code>; the thresholds are listed above and measured in <a href="docs/validation.md">docs/validation.md</a>.</p></details>
+<details><summary>Command not found after install</summary><p>Make sure <code>$PREFIX/bin</code> is on <code>PATH</code>; on Termux that is usually <code>export PATH="$PREFIX/bin:$PATH"</code>.</p></details>
 </section>
 
 <section class="card">
 <h2>Arabic example</h2>
-<p class="ar" lang="ar" dir="rtl">مرحبا بالعالم</p>
+<p class="ar" lang="ar" dir="rtl">مرحبا بالعالم.</p>
 </section>
 
 <section class="card">
-<h2>Filename checker</h2>
-<input id="fn" placeholder="movie.en.srt">
-<pre id="out"></pre>
+<h2>Links</h2>
+<p><a href="https://github.com/muxd22-alt/subtranslate">GitHub</a> &middot;
+<a href="docs/validation.md">docs/validation.md</a> &middot;
+<a href="docs/model-parallelism.md">docs/model-parallelism.md</a></p>
 </section>
 
 </main>
 <script>
+const TABS=['termux','linux','wsl','npm'];
 document.querySelectorAll('.tabs button').forEach(b=>{
   b.addEventListener('click',()=>{
     document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
-    ['termux','linux','wsl'].forEach(t=>{document.getElementById(t).hidden = t!==b.dataset.tab;});
+    TABS.forEach(t=>{const el=document.getElementById(t); if(el) el.hidden = t!==b.dataset.tab;});
   });
 });
 document.querySelectorAll('.copy').forEach(b=>{
   b.addEventListener('click',()=>{navigator.clipboard.writeText(b.dataset.copy);});
 });
-function checkName(n){
-  if(n.endsWith('.en.srt')) return n.replace(/\.en\.srt$/,'.ar.tran.srt');
-  if(n.endsWith('.srt')) return n.replace(/\.srt$/,'.ar.tran.srt');
-  return n;
+function outPathFor(input){
+  if(!input) return '';
+  let base=input.replace(/\.(ar|ara|arabic|en|eng|english)(\.(sub|tran|forced|sdh|hi|cc))?\.srt$/i,'');
+  if(base===input) base=base.replace(/\.srt$/i,'');
+  return base+'.ar.tran.srt';
 }
 const fn=document.getElementById('fn');
 const out=document.getElementById('out');
-fn.addEventListener('input',()=>{out.textContent=checkName(fn.value);});
+const note=document.getElementById('note');
+fn.addEventListener('input',()=>{
+  const v=fn.value.trim();
+  out.textContent=v?outPathFor(v):'';
+  if(!v){note.textContent='';return;}
+  if(/\.ar\.sub\.srt$/i.test(v)) note.textContent='human track: never overwritten';
+  else if(/\.ar\.tran\.srt$/i.test(v)) note.textContent='already a machine track';
+  else if(/\.srt$/i.test(v)) note.textContent='source track: the translation is written next to it';
+  else note.textContent='not a .srt file';
+});
 </script>
 </body>
 </html>
