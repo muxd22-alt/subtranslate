@@ -23,6 +23,12 @@ export { outPathFor, translateDocument };
 
 const USAGE = `subtranslate - offline English -> Arabic subtitle translation
 
+Commands:
+  subtranslate  Translate an English SRT to Arabic
+  subtr         Find and translate a movie subtitle
+  subfind       Download a subtitle next to a video
+  subsync-en    Re-time an English subtitle
+
 Usage:
   subtranslate <english.srt> "<Movie Title>" [options]
 
