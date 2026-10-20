@@ -17,6 +17,7 @@ import { Progress } from './progress.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { outPathFor } from './paths.mjs';
 import { translateDocument } from './translate.mjs';
+import { validateTranslation, formatValidation } from './validate.mjs';
 
 export { outPathFor, translateDocument };
 
@@ -27,6 +28,7 @@ Usage:
 
 Options:
   --out <path>        write here instead of <Movie>.ar.tran.srt next to the input
+  --reject-out <path> keep a rejected translation here for inspection
   --genre <name>      force a genre instead of inferring it from the title
                       (${Object.keys(GENRES).join(', ')})
   --glossary <file>   JSON file with extra terms: {"english": "عربي", ...}
@@ -43,7 +45,7 @@ Options:
 
 function parseArgs(argv) {
     const opts = { positional: [], workers: 4, chunk: 200, overwrite: false, json: false, quiet: false, dryRun: false };
-    const takesValue = new Set(['--out', '--genre', '--glossary', '--workers', '--chunk', '--model-dir']);
+    const takesValue = new Set(['--out', '--reject-out', '--genre', '--glossary', '--workers', '--chunk', '--model-dir']);
 
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
@@ -60,6 +62,7 @@ function parseArgs(argv) {
             if (arg === '--workers') opts.workers = Math.max(1, parseInt(value, 10) || 4);
             else if (arg === '--chunk') opts.chunk = Math.max(1, parseInt(value, 10) || 200);
             else if (arg === '--out') opts.out = value;
+            else if (arg === '--reject-out') opts.rejectOut = value;
             else if (arg === '--genre') opts.genre = value;
             else if (arg === '--glossary') opts.glossary = value;
             else if (arg === '--model-dir') opts.modelDir = value;
@@ -150,6 +153,10 @@ export async function main(argv) {
     }
 
     const doc = parseSrt(fs.readFileSync(input, 'utf8'));
+    const sourceDoc = {
+        ...doc,
+        cues: doc.cues.map(cue => ({ ...cue, lines: [...cue.lines] })),
+    };
     if (!doc.cues.length) {
         log.error(`no cues found in ${input}`);
         if (opts.json) process.stdout.write(JSON.stringify({ event: 'result', status: 'error', reason: 'no-cues', input }) + '\n');
@@ -191,6 +198,28 @@ export async function main(argv) {
         log.info(`dry-run title="${title}" genre=${genre} cues=${stats.total} translated=${stats.translated} elapsed=${elapsed.toFixed(1)}s`);
         if (opts.json) process.stdout.write(JSON.stringify({ event: 'result', status: 'dry-run', genre, ...stats }) + '\n');
         return 0;
+    }
+
+    const validation = validateTranslation(sourceDoc, doc);
+    if (!validation.ok) {
+        log.warn(`rejected title="${title}" ${formatValidation(validation)} reason="${validation.reasons.join('; ')}"`);
+        if (opts.rejectOut) {
+            try {
+                writeAtomic(opts.rejectOut, serializeSrt(doc));
+            } catch (err) {
+                log.error(`could not write rejected translation "${opts.rejectOut}": ${err.message}`);
+            }
+        }
+        if (opts.json) {
+            process.stdout.write(JSON.stringify({
+                event: 'result',
+                status: 'rejected',
+                reason: 'validation',
+                reasons: validation.reasons,
+                metrics: validation.metrics,
+            }) + '\n');
+        }
+        return 4;
     }
 
     // Atomic write: a crashed run must never leave a half written translation.

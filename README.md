@@ -106,6 +106,7 @@ touches the network.
 subtranslate <english.srt> "<Movie Title>" [options]
 
   --out <path>        write here instead of <Movie>.ar.tran.srt
+  --reject-out <path> keep a rejected translation here for inspection
   --genre <name>      force a genre         (general, sci-fi, horror, fantasy,
                                              crime, war, romance)
   --glossary <file>   extra terms: {"english": "عربي", ...}
@@ -186,6 +187,15 @@ short reason when a tool or subtitle is missing.
 | **Atomic** | the file is written to `.<name>.<pid>.part` and renamed, so a crash never leaves a half-written subtitle. |
 | **Never loses a cue** | if a single cue cannot be translated it is kept in English and counted in the log, rather than being dropped or emitted as an empty line. |
 | **Retries** | a failed run exits non-zero and leaves no output, so a scheduled retry is safe. |
+| **Validated** | a translation with too little Arabic, too many English-only cues, or too little source coverage is rejected with exit 4 and is not written over the real output. |
+
+### Validation
+
+Every translation is checked before it is written. The validator compares the
+Arabic output with the English source and rejects English passthrough and
+partly translated files. A rejected run exits `4`; `--reject-out` keeps the bad
+candidate for inspection. Thresholds and the five-movie calibration are in
+[docs/validation.md](docs/validation.md).
 
 Encoding is UTF-8 in, UTF-8 out (a BOM is preserved if present). Convert
 Windows-1256 subtitles first: `iconv -f WINDOWS-1256 -t UTF-8 in.srt > out.srt`.

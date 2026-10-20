@@ -15,6 +15,7 @@ import { outPathFor } from '../src/paths.mjs';
 import { translateDocument } from '../src/translate.mjs';
 import { writeAtomic } from '../src/atomic.mjs';
 import { Progress, formatDuration } from '../src/progress.mjs';
+import { validateTranslation, formatValidation } from '../src/validate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -122,6 +123,49 @@ await check('translateDocument reports monotonic progress', async () => {
     };
     await translateDocument(doc, { engine, terms: {}, chunk: 10, onProgress: (d, t) => seen.push([d, t]) });
     assert.deepEqual(seen, [[0, 2], [1, 2], [2, 2]]);
+});
+
+const docOf = texts => ({ cues: texts.map((text, i) => ({ index: String(i + 1), timing: '', lines: [text] })) });
+const English = ['Hello there.', 'How are you?', 'We leave tonight.', 'The train is late.'];
+const Arabic = ['مرحبا بك.', 'كيف حالك؟', 'نرحل الليلة.', 'القطار متأخر.'];
+
+await check('validator accepts a complete Arabic translation', () => {
+    const r = validateTranslation(docOf(English), docOf(Arabic));
+    assert.equal(r.ok, true, r.reasons.join('; '));
+    assert.equal(r.metrics.arabicCueRatio, 1);
+    assert.equal(r.metrics.sourceCueCoverage, 1);
+});
+
+await check('validator accepts Arabic with a few Latin names', () => {
+    const mixed = ['مرحبا FBI.', 'كيف حالك؟', 'نرحل الليلة.', 'القطار متأخر.'];
+    const r = validateTranslation(docOf(English), docOf(mixed));
+    assert.equal(r.ok, true, r.reasons.join('; '));
+});
+
+await check('validator rejects English passthrough', () => {
+    const r = validateTranslation(docOf(English), docOf(English));
+    assert.equal(r.ok, false);
+    assert.ok(r.reasons.some(x => x.includes('Arabic letter ratio')), r.reasons.join('; '));
+    assert.ok(r.reasons.some(x => x.includes('English-only cue ratio')), r.reasons.join('; '));
+});
+
+await check('validator rejects a half-translated file', () => {
+    const half = [...Arabic.slice(0, 2), ...English.slice(2)];
+    const r = validateTranslation(docOf(English), docOf(half));
+    assert.equal(r.ok, false);
+    assert.ok(r.reasons.some(x => x.includes('Arabic cue ratio')), r.reasons.join('; '));
+});
+
+await check('validator rejects a source that was only partly translated', () => {
+    const r = validateTranslation(docOf(English), docOf(Arabic.slice(0, 2)));
+    assert.equal(r.ok, false);
+    assert.ok(r.reasons.some(x => x.includes('source cue coverage')), r.reasons.join('; '));
+});
+
+await check('validator rejects an empty output', () => {
+    const r = validateTranslation(docOf(English), docOf([]));
+    assert.equal(r.ok, false);
+    assert.match(formatValidation(r), /arabic=0.0%/);
 });
 
 if (process.platform !== 'win32') {
