@@ -1,0 +1,126 @@
+#!/bin/sh
+# subtr - translate an English subtitle of a movie into Arabic.
+set -u
+ST_PROG=subtr
+
+self=$0
+while [ -L "$self" ]; do
+    dir=$(CDPATH= cd -P "$(dirname "$self")" && pwd)
+    self=$(readlink "$self")
+    case $self in /*) ;; *) self=$dir/$self ;; esac
+done
+HERE=$(CDPATH= cd -P "$(dirname "$self")" && pwd)
+
+for lib in "$HERE/../lib/wrappers.sh" "${PREFIX:-/usr/local}/lib/subtranslate/wrappers.sh" \
+           "/usr/local/lib/subtranslate/wrappers.sh" "$HOME/.local/lib/subtranslate/wrappers.sh"; do
+    if [ -f "$lib" ]; then . "$lib"; break; fi
+done
+command -v st_find_en >/dev/null 2>&1 || { echo "subtr: cannot find wrappers.sh" >&2; exit 1; }
+
+usage() {
+    cat <<'EOF'
+Usage: subtr [options] <video|english.srt>
+
+Translate a movie's English subtitle into Arabic on device and write
+<Movie>.ar.tran.srt (or --out).
+
+Options:
+  --out <path>        write here
+  --genre <name>      force a genre instead of inferring it from the title
+  --glossary <file>   JSON file with extra terms: {"english": "عربي", ...}
+  --workers <n>       translation worker threads (default 4)
+  --lang <code>       only ar/ara/arabic are supported
+  --force             re-translate even if the output exists
+  --dry-run           do everything except writing the output
+  --json              pass subtranslate's JSON progress/result through
+  --quiet             pass subtranslate's --quiet through
+  -h, --help          show this help
+
+Exit codes: 0 ok, 2 usage, 3 no English subtitle, 1 translation failed.
+EOF
+}
+
+out=
+genre=
+glossary=
+workers=
+lang=ar
+force=0
+dry=0
+json=0
+quiet=0
+while [ $# -gt 0 ]; do
+    case $1 in
+        -h|--help) usage; exit 0 ;;
+        --force|-f) force=1; shift ;;
+        --dry-run) dry=1; shift ;;
+        --json) json=1; shift ;;
+        --quiet) quiet=1; shift ;;
+        --out) [ $# -ge 2 ] || { echo "subtr: --out needs a value" >&2; exit 2; }; out=$2; shift 2 ;;
+        --genre) [ $# -ge 2 ] || { echo "subtr: --genre needs a value" >&2; exit 2; }; genre=$2; shift 2 ;;
+        --glossary) [ $# -ge 2 ] || { echo "subtr: --glossary needs a value" >&2; exit 2; }; glossary=$2; shift 2 ;;
+        --workers) [ $# -ge 2 ] || { echo "subtr: --workers needs a value" >&2; exit 2; }; workers=$2; shift 2 ;;
+        --lang) [ $# -ge 2 ] || { echo "subtr: --lang needs a value" >&2; exit 2; }; lang=$2; shift 2 ;;
+        --) shift; break ;;
+        -*) echo "subtr: unknown option: $1" >&2; exit 2 ;;
+        *) break ;;
+    esac
+done
+[ $# -ge 1 ] || { usage >&2; exit 2; }
+
+case "$lang" in
+    ar|ara|arabic|AR|ARA|Arabic) ;;
+    *) echo "subtr: only English -> Arabic is supported (got --lang $lang)" >&2; exit 2 ;;
+esac
+
+input=$1
+[ -f "$input" ] || { echo "subtr: not a file: $input" >&2; exit 1; }
+
+case "$input" in
+    *.srt|*.SRT)
+        en=$input
+        base=$(st_video_base "$input")
+        ;;
+    *)
+        base=$(st_video_base "$input")
+        info=$(st_find_en "$base") || { echo "subtr: no English subtitle for $input (run: subfind --lang en $input)" >&2; exit 3; }
+        en=${info%|*}
+        ;;
+esac
+
+if st_has_arabic "$en"; then
+    echo "subtr: $en already contains Arabic; refusing to translate it" >&2
+    exit 3
+fi
+
+target=${out:-$base.ar.tran.srt}
+if [ -s "$target" ] && [ "$force" -ne 1 ]; then
+    echo "subtr: already present: $target"
+    exit 0
+fi
+
+if [ "$dry" -eq 1 ]; then
+    echo "subtr: would translate $en -> $target"
+    exit 0
+fi
+
+set -- "$en" "$(st_title "$base")" --out "$target"
+[ -n "$genre" ] && set -- "$@" --genre "$genre"
+[ -n "$glossary" ] && set -- "$@" --glossary "$glossary"
+[ -n "$workers" ] && set -- "$@" --workers "$workers"
+[ "$force" -eq 1 ] && set -- "$@" --overwrite
+[ "$json" -eq 1 ] && set -- "$@" --json
+[ "$quiet" -eq 1 ] && set -- "$@" --quiet
+
+if [ -n "${SUBTRANSLATE_BIN:-}" ]; then
+    exec "$SUBTRANSLATE_BIN" "$@"
+elif command -v subtranslate >/dev/null 2>&1; then
+    exec subtranslate "$@"
+elif [ -f "$HERE/../bin/subtranslate.js" ]; then
+    exec node "$HERE/../bin/subtranslate.js" "$@"
+elif [ -f "$HERE/subtranslate.js" ]; then
+    exec node "$HERE/subtranslate.js" "$@"
+else
+    echo "subtr: subtranslate is not installed" >&2
+    exit 1
+fi

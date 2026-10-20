@@ -2,16 +2,23 @@
 // subtranslate <english.srt> "<Movie Title>"
 //
 // Translates an English subtitle file into Arabic, on device, and writes
-// <Movie>.ar.srt next to it so Jellyfin (or any other player) picks it up
-// automatically.
+// <Movie>.ar.tran.srt next to it. `tran` marks the machine translation so it
+// can live alongside a downloaded Arabic subtitle (`<Movie>.ar.sub.srt`) in
+// Jellyfin and Plex.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { parseSrt, serializeSrt, cueText, isTranslatable } from './srt.mjs';
+import { parseSrt, serializeSrt } from './srt.mjs';
 import { Engine, defaultModelDir } from './engine.mjs';
-import { GENRES, maskTerms, restoreTerms, hasResidualSentinel } from './glossary.mjs';
+import { GENRES } from './glossary.mjs';
 import { inferGenre } from './brief.mjs';
+import { Progress } from './progress.mjs';
+import { writeAtomic } from './atomic.mjs';
+import { outPathFor } from './paths.mjs';
+import { translateDocument } from './translate.mjs';
+
+export { outPathFor, translateDocument };
 
 const USAGE = `subtranslate - offline English -> Arabic subtitle translation
 
@@ -19,17 +26,17 @@ Usage:
   subtranslate <english.srt> "<Movie Title>" [options]
 
 Options:
-  --out <path>        write here instead of <Movie>.ar.srt next to the input
+  --out <path>        write here instead of <Movie>.ar.tran.srt next to the input
   --genre <name>      force a genre instead of inferring it from the title
                       (${Object.keys(GENRES).join(', ')})
   --glossary <file>   JSON file with extra terms: {"english": "عربي", ...}
   --workers <n>       translation worker threads (default 4)
   --chunk <n>         cues translated per wave (default 200)
   --model-dir <path>  where the en->ar model lives (default ${defaultModelDir()})
-  --overwrite         re-translate even if the .ar.srt already exists
+  --overwrite         re-translate even if the output already exists
   --dry-run           do everything except writing the output file
-  --json              print a machine readable summary on stdout
-  --quiet             only log warnings and errors
+  --json              print progress and a final result as JSON on stdout
+  --quiet             only log warnings and errors (no progress)
   --fetch-model       download the en->ar model, then exit
   -h, --help          show this help
 `;
@@ -66,16 +73,6 @@ function parseArgs(argv) {
     return opts;
 }
 
-/** Where the Arabic subtitle for `input` should go. */
-export function outPathFor(input, explicit) {
-    if (explicit) return explicit;
-    return input
-        .replace(/\.(en|eng)(\.(forced|sdh|hi))?\.srt$/i, '.srt')
-        .replace(/\.srt$/i, '.ar.srt');
-}
-
-const lineCount = s => s.replace(/\n+$/, '').split('\n').length;
-
 class Log {
     constructor(file, { quiet = false } = {}) {
         this.quiet = quiet;
@@ -96,92 +93,6 @@ class Log {
     info(m) { this.write('INFO', m); }
     warn(m) { this.write('WARN', m); }
     error(m) { this.write('ERROR', m); }
-}
-
-/**
- * Translate a parsed document in place.
- * @returns {{total: number, translated: number, kept: number}}
- */
-export async function translateDocument(doc, { engine, terms, chunk, onProgress }) {
-    const work = [];
-    doc.cues.forEach(cue => {
-        const text = cueText(cue);
-        if (isTranslatable(text)) work.push({ cue, text });
-    });
-
-    let kept = 0;
-    if (!work.length) return { total: doc.cues.length, translated: 0, kept: 0 };
-
-    // Pass 1: glossary terms masked out, whole cue translated as one string so
-    // the line breaks inside the cue are preserved by the model.
-    const items = work.map(w => {
-        const { masked, restore } = maskTerms(w.text, terms);
-        return { cue: w.cue, text: w.text, masked, restore, result: null };
-    });
-
-    const out1 = await engine.translateMany(items.map(i => i.masked), { chunkSize: chunk, onProgress });
-
-    const retry = [];
-    items.forEach((item, k) => {
-        const { text: restored, complete } = restoreTerms(out1[k], item.restore);
-        if (complete && !hasResidualSentinel(restored) && restored.trim() && lineCount(restored) === lineCount(item.text)) {
-            item.result = restored;
-        } else {
-            retry.push(item);
-        }
-    });
-
-    // Pass 2: the sentinel trick upset the model, so translate the cue plainly.
-    if (retry.length) {
-        const out2 = await engine.translateMany(retry.map(i => i.text), { chunkSize: chunk });
-        const retry2 = [];
-        retry.forEach((item, k) => {
-            const t = out2[k];
-            if (t && t.trim() && !hasResidualSentinel(t) && lineCount(t) === lineCount(item.text)) {
-                item.result = t;
-            } else {
-                retry2.push(item);
-            }
-        });
-
-        // Pass 3: last resort, translate line by line -- the cue keeps its
-        // shape even though sentences spanning two lines lose some context.
-        if (retry2.length) {
-            const jobs = [];
-            for (const item of retry2) {
-                item.lines = item.text.split('\n');
-                item.lines.forEach((line, idx) => {
-                    if (line.trim()) jobs.push({ item, idx, line });
-                });
-            }
-            if (jobs.length) {
-                const out3 = await engine.translateMany(jobs.map(j => j.line), { chunkSize: chunk });
-                jobs.forEach((job, k) => {
-                    const t = out3[k];
-                    job.item.result ??= job.item.lines.slice();
-                    if (t && t.trim() && !hasResidualSentinel(t)) job.item.result[job.idx] = t;
-                });
-                retry2.forEach(item => {
-                    const joined = Array.isArray(item.result) ? item.result.join('\n') : null;
-                    item.result = joined && joined.trim() ? joined : null;
-                });
-            }
-        }
-    }
-
-    let translated = 0;
-    for (const item of items) {
-        if (item.result) {
-            item.cue.lines = item.result.replace(/\n+$/, '').split('\n');
-            translated++;
-        } else {
-            // Keep the English line rather than dropping the cue. The file stays
-            // complete and valid, and the log records what happened.
-            kept++;
-        }
-    }
-
-    return { total: doc.cues.length, translated, kept };
 }
 
 export async function main(argv) {
@@ -216,16 +127,16 @@ export async function main(argv) {
 
     if (!fs.existsSync(input)) {
         log.error(`input not found: ${input}`);
-        if (opts.json) process.stdout.write(JSON.stringify({ status: 'error', reason: 'input-not-found', input }) + '\n');
+        if (opts.json) process.stdout.write(JSON.stringify({ event: 'result', status: 'error', reason: 'input-not-found', input }) + '\n');
         return 1;
     }
 
     const output = outPathFor(input, opts.out);
 
-    // Idempotency: a movie that already has an Arabic subtitle is never re-done.
+    // Idempotency: a movie that already has a translation is never re-done.
     if (!opts.overwrite && fs.existsSync(output) && fs.statSync(output).size > 0) {
         log.info(`skip title="${title}" reason=already-translated out="${output}"`);
-        if (opts.json) process.stdout.write(JSON.stringify({ status: 'skipped', reason: 'already-translated', output }) + '\n');
+        if (opts.json) process.stdout.write(JSON.stringify({ event: 'result', status: 'skipped', reason: 'already-translated', output }) + '\n');
         return 0;
     }
 
@@ -241,27 +152,34 @@ export async function main(argv) {
     const doc = parseSrt(fs.readFileSync(input, 'utf8'));
     if (!doc.cues.length) {
         log.error(`no cues found in ${input}`);
-        if (opts.json) process.stdout.write(JSON.stringify({ status: 'error', reason: 'no-cues', input }) + '\n');
+        if (opts.json) process.stdout.write(JSON.stringify({ event: 'result', status: 'error', reason: 'no-cues', input }) + '\n');
         return 1;
     }
 
     const engine = new Engine({ modelDir: opts.modelDir || defaultModelDir(), workers: opts.workers });
     let stats;
+    let progress = null;
+    const onProgress = (done, total) => {
+        if (!progress) {
+            progress = new Progress({ json: opts.json, quiet: opts.quiet });
+            progress.start(total);
+        }
+        progress.update(done, total);
+    };
+
     try {
         await engine.start();
-        stats = await translateDocument(doc, {
-            engine,
-            terms,
-            chunk: opts.chunk,
-            onProgress: (done, total) => log.info(`progress ${done}/${total} cues`),
-        });
+        stats = await translateDocument(doc, { engine, terms, chunk: opts.chunk, onProgress });
     } catch (err) {
+        progress?.abort();
         log.error(`translation failed for "${title}": ${err.message}`);
-        if (opts.json) process.stdout.write(JSON.stringify({ status: 'error', reason: 'translation-failed', message: err.message }) + '\n');
+        if (opts.json) process.stdout.write(JSON.stringify({ event: 'result', status: 'error', reason: 'translation-failed', message: err.message }) + '\n');
         return 1;
     } finally {
         await engine.stop().catch(() => {});
     }
+
+    progress?.finish();
 
     if (stats.kept) {
         log.warn(`title="${title}" ${stats.kept} cue(s) could not be translated and were left in English`);
@@ -271,26 +189,23 @@ export async function main(argv) {
 
     if (opts.dryRun) {
         log.info(`dry-run title="${title}" genre=${genre} cues=${stats.total} translated=${stats.translated} elapsed=${elapsed.toFixed(1)}s`);
-        if (opts.json) process.stdout.write(JSON.stringify({ status: 'dry-run', genre, ...stats }) + '\n');
+        if (opts.json) process.stdout.write(JSON.stringify({ event: 'result', status: 'dry-run', genre, ...stats }) + '\n');
         return 0;
     }
 
-    // Atomic write: a crashed run must never leave a half written .ar.srt.
-    const tmp = `${output}.tmp-${process.pid}`;
+    // Atomic write: a crashed run must never leave a half written translation.
     try {
-        fs.mkdirSync(path.dirname(output), { recursive: true });
-        fs.writeFileSync(tmp, serializeSrt(doc), 'utf8');
-        fs.renameSync(tmp, output);
+        writeAtomic(output, serializeSrt(doc));
     } catch (err) {
-        try { fs.unlinkSync(tmp); } catch { /* nothing to clean up */ }
         log.error(`could not write "${output}": ${err.message}`);
-        if (opts.json) process.stdout.write(JSON.stringify({ status: 'error', reason: 'write-failed', message: err.message }) + '\n');
+        if (opts.json) process.stdout.write(JSON.stringify({ event: 'result', status: 'error', reason: 'write-failed', message: err.message }) + '\n');
         return 1;
     }
 
     log.info(`translated title="${title}" genre=${genre} cues=${stats.total} translated=${stats.translated} elapsed=${elapsed.toFixed(1)}s out="${output}"`);
     if (opts.json) {
         process.stdout.write(JSON.stringify({
+            event: 'result',
             status: 'translated', genre, output,
             cues: stats.total, translated: stats.translated, kept: stats.kept,
             elapsed_seconds: +elapsed.toFixed(1),

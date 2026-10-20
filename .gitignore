@@ -1,10 +1,15 @@
 node_modules/
 
-# translated output and in-flight temp files
+# translated/downloaded output and in-flight temp files
 *.ar.srt
+*.ar.sub.srt
+*.ar.tran.srt
+*.en.srt
+*.part
 *.tmp-*
 
 # scratch
 cmp.mjs
 cmp2.mjs
 testdata/
+tests/.tmp/

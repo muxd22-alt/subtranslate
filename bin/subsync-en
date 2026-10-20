@@ -1,0 +1,123 @@
+#!/bin/sh
+# subsync-en - re-time a subtitle against the video or another subtitle.
+# Named -en because ffsubsync already installs a `subsync` command.
+set -u
+ST_PROG=subsync-en
+
+self=$0
+while [ -L "$self" ]; do
+    dir=$(CDPATH= cd -P "$(dirname "$self")" && pwd)
+    self=$(readlink "$self")
+    case $self in /*) ;; *) self=$dir/$self ;; esac
+done
+HERE=$(CDPATH= cd -P "$(dirname "$self")" && pwd)
+
+for lib in "$HERE/../lib/wrappers.sh" "${PREFIX:-/usr/local}/lib/subtranslate/wrappers.sh" \
+           "/usr/local/lib/subtranslate/wrappers.sh" "$HOME/.local/lib/subtranslate/wrappers.sh"; do
+    if [ -f "$lib" ]; then . "$lib"; break; fi
+done
+command -v st_find_en >/dev/null 2>&1 || { echo "subsync-en: cannot find wrappers.sh" >&2; exit 1; }
+
+usage() {
+    cat <<'EOF'
+Usage: subsync-en [options] <video|subtitles.srt>
+
+Re-time a subtitle so it matches the video (or --ref subtitle).
+It does not care which language the subtitle is in.
+
+Options:
+  --ref <path>        reference video/subtitle (default: the video)
+  --out <path>        write here (default: sync the English subtitle in place)
+  --lang <code>       language of the subtitle to find (default: en)
+  --timeout <seconds> give up after this many seconds (default: 600)
+  --dry-run           print what would run
+  -h, --help          show this help
+
+Exit codes: 0 ok, 2 usage, 3 no English subtitle, 4 ffsubsync missing.
+EOF
+}
+
+ref=
+out=
+lang=en
+limit=${SUBSYNC_TIMEOUT:-600}
+dry=0
+while [ $# -gt 0 ]; do
+    case $1 in
+        -h|--help) usage; exit 0 ;;
+        --dry-run) dry=1; shift ;;
+        --ref) [ $# -ge 2 ] || { echo "subsync-en: --ref needs a value" >&2; exit 2; }; ref=$2; shift 2 ;;
+        --out) [ $# -ge 2 ] || { echo "subsync-en: --out needs a value" >&2; exit 2; }; out=$2; shift 2 ;;
+        --lang) [ $# -ge 2 ] || { echo "subsync-en: --lang needs a value" >&2; exit 2; }; lang=$2; shift 2 ;;
+        --timeout) [ $# -ge 2 ] || { echo "subsync-en: --timeout needs a value" >&2; exit 2; }; limit=$2; shift 2 ;;
+        --) shift; break ;;
+        -*) echo "subsync-en: unknown option: $1" >&2; exit 2 ;;
+        *) break ;;
+    esac
+done
+[ $# -ge 1 ] || { usage >&2; exit 2; }
+
+input=$1
+[ -f "$input" ] || { echo "subsync-en: not a file: $input" >&2; exit 1; }
+
+case "$input" in
+    *.srt|*.SRT)
+        target=$input
+        base=$(st_video_base "$input")
+        ;;
+    *)
+        base=$(st_video_base "$input")
+        if [ -n "$out" ]; then
+            target=$out
+        else
+            info=$(st_find_en "$base") || { echo "subsync-en: no English subtitle next to $input (use --ref or --out)" >&2; exit 3; }
+            target=${info%|*}
+        fi
+        ;;
+esac
+
+if [ -z "$ref" ]; then
+    ref=$(st_find_video "$base") || true
+    [ -n "$ref" ] || { echo "subsync-en: no video found for $base (use --ref)" >&2; exit 1; }
+fi
+[ -f "$ref" ] || { echo "subsync-en: reference not found: $ref" >&2; exit 1; }
+
+if ! st_have ffsubsync; then
+    echo "subsync-en: ffsubsync is not installed (pip install ffsubsync)" >&2
+    exit 4
+fi
+
+if [ "$dry" -eq 1 ]; then
+    echo "subsync-en: ffsubsync $ref -i $target -o $target"
+    exit 0
+fi
+
+tmp="$target.$$.tmp.srt"
+rm -f "$tmp"
+if st_have timeout; then
+    timeout "$limit" ffsubsync "$ref" -i "$target" -o "$tmp"
+    rc=$?
+else
+    ffsubsync "$ref" -i "$target" -o "$tmp"
+    rc=$?
+fi
+
+if [ "$rc" -eq 124 ]; then
+    rm -f "$tmp"
+    echo "subsync-en: timed out after ${limit}s" >&2
+    exit 1
+fi
+if [ "$rc" -ne 0 ] || ! st_is_srt "$tmp"; then
+    rm -f "$tmp"
+    echo "subsync-en: ffsubsync failed for $target" >&2
+    exit 1
+fi
+
+if ! mv -f "$tmp" "$target"; then
+    rm -f "$tmp"
+    echo "subsync-en: could not replace $target" >&2
+    exit 1
+fi
+
+echo "sync: saved $target"
+exit 0

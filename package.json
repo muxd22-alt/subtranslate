@@ -1,15 +1,19 @@
-{
+﻿{
   "name": "subtranslate",
-  "version": "0.1.0",
-  "description": "Offline English to Arabic subtitle translation, on device. Point it at a subtitle file and a movie title; it writes the Arabic .srt next to it.",
+  "version": "0.2.0",
+  "description": "Offline English to Arabic subtitle translation, on device, with subfind/subsync wrappers for a whole library.",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "subtranslate": "bin/subtranslate.js"
+    "subtranslate": "bin/subtranslate.js",
+    "subfind": "bin/subfind",
+    "subsync-en": "bin/subsync-en",
+    "subtr": "bin/subtr"
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.mjs",
-    "fetch-model": "node scripts/fetch-model.mjs"
+    "fetch-model": "node scripts/fetch-model.mjs",
+    "test": "node tests/verify.mjs"
   },
   "dependencies": {
     "@browsermt/bergamot-translator": "^0.4.9"
@@ -19,6 +23,7 @@
   },
   "files": [
     "bin",
+    "lib",
     "src",
     "scripts",
     "README.md"

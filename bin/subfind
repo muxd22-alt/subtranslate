@@ -1,0 +1,118 @@
+#!/bin/sh
+# subfind - download a subtitle next to a video.
+set -u
+ST_PROG=subfind
+
+self=$0
+while [ -L "$self" ]; do
+    dir=$(CDPATH= cd -P "$(dirname "$self")" && pwd)
+    self=$(readlink "$self")
+    case $self in /*) ;; *) self=$dir/$self ;; esac
+done
+HERE=$(CDPATH= cd -P "$(dirname "$self")" && pwd)
+
+for lib in "$HERE/../lib/wrappers.sh" "${PREFIX:-/usr/local}/lib/subtranslate/wrappers.sh" \
+           "/usr/local/lib/subtranslate/wrappers.sh" "$HOME/.local/lib/subtranslate/wrappers.sh"; do
+    if [ -f "$lib" ]; then . "$lib"; break; fi
+done
+command -v st_download >/dev/null 2>&1 || { echo "subfind: cannot find wrappers.sh" >&2; exit 1; }
+
+usage() {
+    cat <<'EOF'
+Usage: subfind [options] <video|subtitle>
+
+Download an Arabic subtitle (or --lang <code>) for a video.
+
+Options:
+  --lang <code>       language to download (default: ar)
+  --out <path>        write here instead of <video>.<lang>.srt
+                      (Arabic defaults to <video>.ar.sub.srt)
+  --providers <list>  subliminal providers, comma separated
+  --force             overwrite an existing subtitle
+  --dry-run           print what would be downloaded
+  -h, --help          show this help
+
+Exit codes: 0 ok, 2 usage, 3 not found, 4 subliminal/ffmpeg missing.
+EOF
+}
+
+lang=ar
+force=0
+dry=0
+out=
+while [ $# -gt 0 ]; do
+    case $1 in
+        -h|--help) usage; exit 0 ;;
+        --force|-f) force=1; shift ;;
+        --dry-run) dry=1; shift ;;
+        --lang) [ $# -ge 2 ] || { echo "subfind: --lang needs a value" >&2; exit 2; }; lang=$2; shift 2 ;;
+        --providers) [ $# -ge 2 ] || { echo "subfind: --providers needs a value" >&2; exit 2; }; SUBFIND_PROVIDERS=$2; export SUBFIND_PROVIDERS; shift 2 ;;
+        --out) [ $# -ge 2 ] || { echo "subfind: --out needs a value" >&2; exit 2; }; out=$2; shift 2 ;;
+        --) shift; break ;;
+        -*) echo "subfind: unknown option: $1" >&2; exit 2 ;;
+        *) break ;;
+    esac
+done
+[ $# -ge 1 ] || { usage >&2; exit 2; }
+
+input=$1
+if [ ! -f "$input" ]; then
+    echo "subfind: not a file: $input" >&2
+    exit 1
+fi
+
+case "$input" in
+    *.srt|*.SRT)
+        base=$(st_video_base "$input")
+        video=$(st_find_video "$base") || { echo "subfind: no video next to $input" >&2; exit 1; }
+        ;;
+    *)
+        video=$input
+        base=$(st_video_base "$video")
+        ;;
+esac
+
+if [ -n "$out" ]; then
+    target=$out
+elif [ "$lang" = ar ] || [ "$lang" = ara ] || [ "$lang" = arabic ]; then
+    target=$base.ar.sub.srt
+else
+    target=$base.$lang.srt
+fi
+
+if [ -s "$target" ] && [ "$force" -ne 1 ]; then
+    echo "subfind: already present: $target"
+    exit 0
+fi
+
+if [ "$dry" -eq 1 ]; then
+    echo "subfind: would download $lang for $video -> $target"
+    exit 0
+fi
+
+found=$(st_download "$video" "$lang")
+rc=$?
+case $rc in
+    0) ;;
+    3) echo "subfind: no $lang subtitle found for $video" >&2; exit 3 ;;
+    4) echo "subfind: subliminal (or ffmpeg for conversion) is not installed" >&2; exit 4 ;;
+    *) echo "subfind: download failed for $video" >&2; exit 1 ;;
+esac
+
+if [ "$lang" = ar ] || [ "$lang" = ara ] || [ "$lang" = arabic ]; then
+    if ! st_has_arabic "$found"; then
+        echo "subfind: provider returned a non-Arabic file; not installing it" >&2
+        case "$(dirname "$found")" in */subtranslate.*) rm -rf "$(dirname "$found")" ;; esac
+        exit 3
+    fi
+fi
+
+if st_atomic_copy "$found" "$target"; then
+    case "$(dirname "$found")" in */subtranslate.*) rm -rf "$(dirname "$found")" ;; esac
+    echo "sub: saved $target"
+    exit 0
+fi
+
+case "$(dirname "$found")" in */subtranslate.*) rm -rf "$(dirname "$found")" ;; esac
+echo "subfind: could not write $target" >&2
+exit 1

@@ -142,6 +142,12 @@ export class Engine {
         const chunkSize = options.chunkSize || 200;
         const retries = options.retries ?? 2;
         const results = new Array(texts.length);
+        let reported = 0;
+        const report = n => {
+            if (n <= reported) return;
+            reported = n;
+            options.onProgress?.(n, texts.length);
+        };
 
         for (let start = 0; start < texts.length; start += chunkSize) {
             const end = Math.min(start + chunkSize, texts.length);
@@ -150,20 +156,23 @@ export class Engine {
             let lastError;
             for (let attempt = 0; attempt <= retries; attempt++) {
                 try {
-                    const translated = await Promise.all(slice.map(text =>
+                    const translated = await Promise.all(slice.map((text, i) =>
                         this.translator
                             .translate({ from: 'en', to: 'ar', text, html: false, qualityScores: false })
-                            .then(r => r.target.text)));
+                            .then(r => {
+                                report(start + i + 1);
+                                return r.target.text;
+                            })));
                     translated.forEach((t, i) => { results[start + i] = t; });
                     lastError = undefined;
                     break;
                 } catch (err) {
                     lastError = err;
+                    reported = Math.max(reported, start);
                 }
             }
 
             if (lastError) throw lastError;
-            options.onProgress?.(end, texts.length);
         }
 
         return results;
