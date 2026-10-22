@@ -60,7 +60,7 @@ export const config = {
 
     // Bump this whenever the system prompt or the gate changes. The sidecar
     // stores it, so an old refinement is redone instead of being trusted.
-    promptVersion: process.env.REFINE_PROMPT_VERSION || 'v1',
+    promptVersion: process.env.REFINE_PROMPT_VERSION || 'v2',
 
     watermarkText: process.env.REFINE_WATERMARK || 'done by SubTranslate',
 };

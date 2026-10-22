@@ -17,16 +17,21 @@ export function buildSystemPrompt(brief, glossary = { names: {}, terms: {}, tone
     const genre = brief.genres && brief.genres.length ? brief.genres : [];
     const { label, tone } = toneFor(brief.genres || []);
     const lines = [
-        'You are a careful Arabic subtitle editor.',
+        'You are a professional Arabic subtitle editor working on a feature film.',
         'You get an English line, a machine translated Arabic line, and the lines around it.',
-        'Fix ONLY real errors in the Arabic. If the Arabic is already correct, return it unchanged.',
+        'Your job: make the Arabic read like it was written by a professional subtitle translator.',
+        'Fix real errors, and also fix wording that is wrong, stiff or a literal calque from the English.',
+        'Most lines just need small touches; return them unchanged only when they are already natural.',
         'Rules:',
-        '- Correct gender agreement (he/she, his/her) using the character genders below.',
         '- Never change the meaning. Do not add, drop or invent anything.',
-        '- Use the given Arabic spelling for names.',
-        '- Style: natural concise Arabic, at most 2 lines, about 42 characters per line.',
-        '- Keep <i> tags, the music note, speaker dashes and the line breaks.',
-        '- If you are not sure, return the Arabic unchanged.',
+        '- Correct gender agreement (he/she, his/her, verbs that mark gender) using the character',
+        '  genders below. Never guess a gender that is not given.',
+        '- Use the given Arabic spelling for names. Keep terminology consistent across the film.',
+        '- Style: natural, concise, spoken-feeling Modern Standard Arabic; idioms sound Arabic,',
+        '  not translated. At most 2 lines, about 42 characters per line.',
+        '- Keep <i> tags, the music note, speaker dashes, ellipses and the line breaks.',
+        '- Do not merge or split cues. One answer per cue you were given.',
+        '- If a line is unreadable or you are not sure, return the Arabic unchanged.',
         '- Output JSON only. No explanation.',
         '',
         `FILM: ${brief.title || 'unknown'}${brief.year ? ` (${brief.year})` : ''}`,
@@ -60,7 +65,15 @@ export function buildSystemPrompt(brief, glossary = { names: {}, terms: {}, tone
     }
 
     lines.push('');
-    lines.push('Answer with {"edits":[{"i":<same index>,"ar":"<the arabic text>"}]} for every cue you were given.');
+    lines.push('The answer is JSON only, one entry per cue you were given, same index:');
+    lines.push('{"edits":[{"i":1,"ar":"النص العربي المصلح"}]}');
+    lines.push('Example of a batch of two cues (English -> machine Arabic -> your answer):');
+    lines.push('i=1  EN "She said that he is waiting for us downstairs."');
+    lines.push('     AR "قالت أنه انتظارنا في أسفل."   (unnatural, wrong gender form)');
+    lines.push('     -> {"i":1,"ar":"قالت إنه ينتظرنا في الطابق السفلي."}');
+    lines.push('i=2  EN "Come on, we have no time for this."');
+    lines.push('     AR "هيا، ليس لدينا وقت لهذا."     (already natural)');
+    lines.push('     -> {"i":2,"ar":"هيا، ليس لدينا وقت لهذا."}');
     return lines.join('\n');
 }
 
