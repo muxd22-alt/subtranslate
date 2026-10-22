@@ -35,6 +35,10 @@ export const config = {
     serverPort: num('REFINE_PORT', 8081),
     serverThreads: num('REFINE_THREADS', 4),
     serverCtx: num('REFINE_CTX', 4096),
+    // Parallel slots in the llama-server and in-flight batches in the client.
+    // The per-request work is the same; two slots overlap prompt evaluation
+    // with generation, so a film refines in noticeably less wall time.
+    slots: num('REFINE_SLOTS', 2),
     serverIdle: Number(process.env.REFINE_IDLE ?? 300),
     serverNice: Number(process.env.REFINE_NICE ?? 10),
     bootTimeout: num('REFINE_BOOT_TIMEOUT', 180),
@@ -43,7 +47,7 @@ export const config = {
     topP: Number(process.env.REFINE_TOP_P ?? 0.9),
     maxTokens: num('REFINE_MAX_TOKENS', 1024),
     batchSize: num('REFINE_BATCH', 8),
-    httpTimeout: num('REFINE_HTTP_TIMEOUT', 30),
+    httpTimeout: num('REFINE_HTTP_TIMEOUT', 240),
 
     // The gate refuses a refinement that rewrites more than this share of the
     // cues, or that loses this share of the cues to a failed check. Both mean

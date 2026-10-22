@@ -118,68 +118,85 @@ export async function refineCues(arabicCues, englishCues, brief, glossary, serve
     if (!work.length) return result;
 
     const size = config.batchSize;
-    for (let offset = 0; offset < work.length; offset += size) {
-        const batch = work.slice(offset, offset + size);
+    const slots = Math.max(1, config.slots);
 
-        const context = { prev: { en: '', ar: '' }, next: { en: '', ar: '' } };
-        if (offset > 0) {
-            const before = work[offset - 1];
-            context.prev = { en: before.en, ar: before.raw };
+    const runBatch = (batch, firstIndex, indexAfter) => {
+        const local = { prev: { en: '', ar: '' }, next: { en: '', ar: '' } };
+        if (firstIndex > 0) {
+            const before = work[firstIndex - 1];
+            local.prev = { en: before.en, ar: before.raw };
         }
-        if (offset + size < work.length) {
-            const after = work[offset + size];
-            context.next = { en: after.en, ar: after.raw };
+        if (indexAfter < work.length) {
+            const after = work[indexAfter];
+            local.next = { en: after.en, ar: after.raw };
         }
 
         const payload = buildBatchPayload(
             batch.map(cue => ({ i: cue.i, en: cue.en, ar: cue.ar })),
-            context,
+            local,
         );
 
-        const { edits, error } = await askModel(systemPrompt, payload);
-        result.batches += 1;
-        result.sent += batch.length;
-        server.lastUsed = Date.now();
+        return askModel(systemPrompt, payload).then(answer => {
+            server.lastUsed = Date.now();
+            return { batch, answer };
+        });
+    };
 
-        if (error) {
-            process.stderr.write(`subqwen: a batch of ${batch.length} failed: ${error}\n`);
-            result.failed += batch.length;
+    // Every edit carries its cue index, so the answers can arrive in any
+    // order; with `slots` in flight the server overlaps one batch's prompt
+    // evaluation with another batch's generation.
+    for (let offset = 0; offset < work.length; offset += size * slots) {
+        const batches = [];
+        for (let b = 0, at = offset; b < slots && at < work.length; b += 1, at += size) {
+            batches.push(runBatch(work.slice(at, at + size), at, at + size));
+        }
+
+        const answers = await Promise.all(batches);
+        result.batches += answers.length;
+        for (const { batch, answer } of answers) {
+            const { edits, error } = answer;
+            result.sent += batch.length;
+
+            if (error) {
+                process.stderr.write(`subqwen: a batch of ${batch.length} failed: ${error}\n`);
+                result.failed += batch.length;
+                server.stopIfIdle();
+                continue;
+            }
+
+            const byIndex = new Map();
+            for (const edit of edits) {
+                if (!edit || typeof edit !== 'object') continue;
+                const index = Number(edit.i);
+                if (!Number.isFinite(index)) continue;
+                byIndex.set(index, edit.ar);
+            }
+
+            for (const cue of batch) {
+                if (!byIndex.has(cue.i)) {
+                    result.failed += 1;
+                    continue;
+                }
+                const candidate = byIndex.get(cue.i);
+                // A line the model left alone is not a change and not a failure.
+                // The raw line may hold a Latin fragment that the gate would
+                // refuse, and that is fine: nothing was rewritten.
+                if (String(candidate).trim() === cue.raw.trim()) continue;
+                const check = checkCue(cue.raw, candidate, allowedLatin, {
+                    maxLineChars: config.maxLineChars,
+                    maxTotalChars: config.maxTotalChars,
+                    minArabicRatio: config.minArabicRatio,
+                });
+                if (!check.ok) {
+                    result.failed += 1;
+                    continue;
+                }
+                result.changed += 1;
+                result.new.set(cue.i, candidate.trim());
+            }
+
             server.stopIfIdle();
-            continue;
         }
-
-        const byIndex = new Map();
-        for (const edit of edits) {
-            if (!edit || typeof edit !== 'object') continue;
-            const index = Number(edit.i);
-            if (!Number.isFinite(index)) continue;
-            byIndex.set(index, edit.ar);
-        }
-
-        for (const cue of batch) {
-            if (!byIndex.has(cue.i)) {
-                result.failed += 1;
-                continue;
-            }
-            const candidate = byIndex.get(cue.i);
-            // A line the model left alone is not a change and not a failure.
-            // The raw line may hold a Latin fragment that the gate would
-            // refuse, and that is fine: nothing was rewritten.
-            if (String(candidate).trim() === cue.raw.trim()) continue;
-            const check = checkCue(cue.raw, candidate, allowedLatin, {
-                maxLineChars: config.maxLineChars,
-                maxTotalChars: config.maxTotalChars,
-                minArabicRatio: config.minArabicRatio,
-            });
-            if (!check.ok) {
-                result.failed += 1;
-                continue;
-            }
-            result.changed += 1;
-            result.new.set(cue.i, candidate.trim());
-        }
-
-        server.stopIfIdle();
     }
 
     return result;

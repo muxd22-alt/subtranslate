@@ -47,12 +47,16 @@ export function findModel(explicit) {
  * even when the server was started with the plain set.
  */
 export function serverFlagSets() {
+    // REFINE_CTX is the context per slot; llama.cpp takes the total, so two
+    // slots on a 6144 per-slot context get a 12288 token KV cache.
+    const totalCtx = config.serverCtx * Math.max(1, config.slots);
     const common = [
         '--host', config.serverHost,
         '--port', String(config.serverPort),
-        '-c', String(config.serverCtx),
+        '-c', String(totalCtx),
         '-t', String(config.serverThreads),
     ];
+    if (config.slots > 1) common.push('-np', String(config.slots));
     return [
         [...common, '--reasoning', 'off', '--ui', 'off'],
         [...common, '--reasoning', 'off'],
