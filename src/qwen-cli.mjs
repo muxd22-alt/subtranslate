@@ -20,6 +20,7 @@ import { refineOne, mediaHash } from './qwen.mjs';
 import { buildBrief } from './qwen-brief.mjs';
 import { parseMediaInfo, findEnglishSource, baseFor } from './qwen-media.mjs';
 import { LlamaServer, askModel, findModel } from './qwen-server.mjs';
+import { buildSystemPrompt, buildBatchPayload } from './qwen-prompt.mjs';
 import { ensureWatermarkFile, DEFAULT_WATERMARK } from './watermark.mjs';
 
 const USAGE = `subqwen - fix a machine translated Arabic subtitle with a local LLM
@@ -304,12 +305,25 @@ async function commandVerify(opts) {
         return 1;
     }
     try {
+        // Ask with the same prompt the real stage uses, so verify certifies
+        // exactly what will run for a film.
+        const systemPrompt = buildSystemPrompt(
+            { title: 'Verify', genres: [] },
+            { names: {}, terms: {}, tone: '' },
+        );
         const { edits, error } = await askModel(
-            'You are a translator. Answer with JSON only.',
-            { cues: [{ i: 1, en: 'Hello', ar: 'مرحبا' }] },
+            systemPrompt,
+            buildBatchPayload(
+                [{ i: 1, en: 'Hello', ar: 'مرحبا' }],
+                { prev: { en: '', ar: '' }, next: { en: '', ar: '' } },
+            ),
         );
         if (error) {
             process.stderr.write(`subqwen: the model answered with: ${error}\n`);
+            return 1;
+        }
+        if (!edits.length) {
+            process.stderr.write('subqwen: the model returned no edits\n');
             return 1;
         }
         process.stdout.write(`model ${path.basename(model)} works, answer: ${JSON.stringify(edits)}\n`);
