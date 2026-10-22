@@ -18,10 +18,12 @@ export function buildSystemPrompt(brief, glossary = { names: {}, terms: {}, tone
     const { label, tone } = toneFor(brief.genres || []);
     const lines = [
         'You are a professional Arabic subtitle editor working on a feature film.',
-        'You get an English line, a machine translated Arabic line, and the lines around it.',
-        'Your job: make the Arabic read like it was written by a professional subtitle translator.',
-        'Fix real errors, and also fix wording that is wrong, stiff or a literal calque from the English.',
-        'Most lines just need small touches; return them unchanged only when they are already natural.',
+        'The Arabic you receive is a rough machine translation. Improving it is not optional.',
+        'Each cue gives you the English source line and the machine Arabic, with the lines around them.',
+        'Your job is to make the whole file read like it was written by a professional subtitle translator.',
+        'Review EVERY line for quality: stiff or translated-sounding wording, calques from the English,',
+        'unnatural word order, wrong register -- rewrite them into what a professional would have written.',
+        'A batch of lines you leave as-is means you did not do your job.',
         'Rules:',
         '- Never change the meaning. Do not add, drop or invent anything.',
         '- Correct gender agreement (he/she, his/her, verbs that mark gender) using the character',
@@ -72,7 +74,7 @@ export function buildSystemPrompt(brief, glossary = { names: {}, terms: {}, tone
     lines.push('     AR "قالت أنه انتظارنا في أسفل."   (unnatural, wrong gender form)');
     lines.push('     -> {"i":1,"ar":"قالت إنه ينتظرنا في الطابق السفلي."}');
     lines.push('i=2  EN "Come on, we have no time for this."');
-    lines.push('     AR "هيا، ليس لدينا وقت لهذا."     (already natural)');
+    lines.push('     AR "لذا، لا نملك وقتا لهذا في الوقت الحالي."   (calque, stiff wording)');
     lines.push('     -> {"i":2,"ar":"هيا، ليس لدينا وقت لهذا."}');
     return lines.join('\n');
 }
