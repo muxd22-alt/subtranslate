@@ -1,0 +1,76 @@
+#!/bin/sh
+# subqwen - fix a machine translated Arabic subtitle with a local LLM.
+set -u
+ST_PROG=subqwen
+
+self=$0
+while [ -L "$self" ]; do
+    dir=$(CDPATH= cd -P "$(dirname "$self")" && pwd)
+    self=$(readlink "$self")
+    case $self in /*) ;; *) self=$dir/$self ;; esac
+done
+HERE=$(CDPATH= cd -P "$(dirname "$self")" && pwd)
+
+for lib in "$HERE/../lib/wrappers.sh" "${PREFIX:-/usr/local}/lib/subtranslate/wrappers.sh" \
+           "/usr/local/lib/subtranslate/wrappers.sh" "$HOME/.local/lib/subtranslate/wrappers.sh"; do
+    if [ -f "$lib" ]; then . "$lib"; break; fi
+done
+
+usage() {
+    cat <<'EOF'
+Usage: subqwen <command> [options]
+
+Fix a machine translated Arabic subtitle with a local LLM.
+
+Commands:
+  refine <video|srt>    refine the Arabic next to a video
+  watermark <srt>       put the tool name in the first 4 seconds
+  doctor                check the setup
+  verify                load the model and ask it something
+  brief <video>         print the movie brief
+
+Refine options:
+  --dry-run             write a report, change nothing
+  --force               refine again even if the sidecar matches
+  --provider <name>     auto, tmdb, tvmaze, cinemeta or nfo
+  --offline             do not use the network for the brief
+  --no-sounds           keep the sound cues instead of dropping them
+  --watermark [text]    add the watermark cue
+
+Exit codes: 0 ok, 2 usage, 3 nothing to do, 5 another job is running.
+EOF
+}
+
+command=${1:-}
+[ $# -gt 0 ] && shift
+
+case "$command" in
+    -h|--help|help)
+        usage
+        exit 0
+        ;;
+    refine|watermark|doctor|verify|brief)
+        ;;
+    '')
+        usage >&2
+        exit 2
+        ;;
+    *)
+        echo "subqwen: unknown command: $command" >&2
+        usage >&2
+        exit 2
+        ;;
+esac
+
+if [ -n "${SUBQWEN_BIN:-}" ]; then
+    exec "$SUBQWEN_BIN" "$command" "$@"
+elif command -v subqwen >/dev/null 2>&1; then
+    exec subqwen "$command" "$@"
+elif [ -f "$HERE/subqwen.js" ]; then
+    exec node "$HERE/subqwen.js" "$command" "$@"
+elif [ -f "$HERE/../bin/subqwen.js" ]; then
+    exec node "$HERE/../bin/subqwen.js" "$command" "$@"
+else
+    echo "subqwen: subqwen is not installed" >&2
+    exit 1
+fi

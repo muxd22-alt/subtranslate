@@ -110,9 +110,36 @@ cat examples/hello.ar.tran.srt</code></pre>
 <tr><td><code>subtranslate</code></td><td>Translate an English SRT to Arabic</td></tr>
 <tr><td><code>subtr</code></td><td>Find and translate a movie subtitle</td></tr>
 <tr><td><code>subfind</code></td><td>Download a subtitle next to a video</td></tr>
-<tr><td><code>subsync-en</code></td><td>Re-time an English subtitle</td></tr>
+  <tr><td><code>subsync-en</code></td><td>Re-time an English subtitle</td></tr>
+  <tr><td><code>subqwen</code></td><td>Fix a translated Arabic subtitle with a local LLM</td></tr>
 </table>
 <p><code>subtranslate --help</code> prints the same table plus every option.</p>
+</section>
+
+<section class="card">
+<h2>subqwen: the second pass</h2>
+<p>The translator is a small model, so it gets the gender wrong, it
+transliterates names nobody recognises and it writes every film in the same
+flat voice. <code>subqwen</code> re-reads the result with the English source
+and a small local model, and fixes only what is really wrong.</p>
+<pre>subqwen refine Movie.2026.mkv
+subqwen refine Movie.2026.mkv --dry-run
+subqwen brief Movie.2026.mkv
+subqwen doctor --live</pre>
+<button class="copy" data-copy="subqwen refine Movie.2026.mkv&#10;subqwen brief Movie.2026.mkv">Copy</button>
+<ul>
+<li>Cue numbers, timings and line breaks never change. Only the text of a cue
+is rewritten, and only when the rewrite passes a mechanical gate.</li>
+<li>The raw translation is kept at <code>~/.cache/subgrab/raw/&lt;hash&gt;.srt</code>, so a
+refinement can always be undone.</li>
+<li>Sound only cues are dropped: a professional subtitle has no stage
+directions in it.</li>
+<li>The model gets a short brief about the film: title, genres, a tone line
+and the main characters with their gender. The gender comes from the metadata
+provider and is never guessed.</li>
+<li>The brief comes from TMDB when there is a key, and from TVmaze or Cinemeta
+when there is not.</li>
+</ul>
 </section>
 
 <section class="card">

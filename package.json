@@ -8,12 +8,13 @@
     "subtranslate": "bin/subtranslate.js",
     "subfind": "bin/subfind",
     "subsync-en": "bin/subsync-en",
-    "subtr": "bin/subtr"
+    "subtr": "bin/subtr",
+    "subqwen": "bin/subqwen.js"
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.mjs",
     "fetch-model": "node scripts/fetch-model.mjs",
-    "test": "node tests/verify.mjs"
+    "test": "node tests/verify.mjs && node tests/qwen.mjs"
   },
   "dependencies": {
     "@browsermt/bergamot-translator": "^0.4.9"

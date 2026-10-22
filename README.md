@@ -40,7 +40,7 @@ sh install.sh
 ```
 
 `install.sh` installs the dependencies, fetches the model, links `subtranslate`
-and puts `subfind`, `subsync-en` and `subtr` into `$PREFIX/bin`.
+and puts `subfind`, `subsync-en`, `subtr` and `subqwen` into `$PREFIX/bin`.
 
 Or via npm:
 ```
@@ -55,8 +55,52 @@ npm install -g subtranslate
 | subtr | Find and translate a movie subtitle |
 | subfind | Download a subtitle next to a video |
 | subsync-en | Re-time an English subtitle |
+| subqwen | Fix a translated Arabic subtitle with a local LLM |
 
 `subtranslate --help` prints the same table.
+
+## subqwen: the second pass
+
+The translator is fast and free, but it is a small model: it gets the gender
+wrong, it transliterates names nobody recognises and it writes every film in
+the same flat voice. `subqwen` re-reads the result with the English source
+and a small local model, and fixes only what is really wrong.
+
+```
+subqwen refine Movie.2026.mkv          # fix Movie.2026.ar.tran.srt
+subqwen refine Movie.2026.mkv --dry-run # write a report, change nothing
+subqwen brief Movie.2026.mkv            # show the movie brief it would use
+subqwen doctor --live                   # check the setup and the model
+```
+
+What it does:
+
+- It never changes a cue number, a timing or a line break. Only the text of a
+  cue is rewritten, and only when the rewrite passes a mechanical gate:
+  mostly Arabic, no leftover Latin except known names, no lost italics, no
+  changed numbers, at most two lines and about 42 characters per line.
+- It keeps the raw translation at `~/.cache/subgrab/raw/<hash>.srt`, so a
+  refinement can always be undone.
+- It drops the sound only cues ("(gunshot)", "sighs", "Ugh"), because a
+  professional subtitle has no stage directions in it.
+- It puts the tool name in the first four seconds, without touching the
+  timings of the other cues.
+- It gives the model a short brief about the film: title, genres, a tone line
+  and the main characters with their gender. The gender comes from the
+  metadata provider and is never guessed.
+
+Where the brief comes from, in order:
+
+| Provider | Key | Movies | TV | Cast gender |
+|---|---|---|---|---|
+| TMDB | `~/.config/subgrab/tmdb-key` | yes | yes | yes |
+| TVmaze | none | no | yes | yes |
+| Cinemeta | none | yes | yes | no |
+| the .nfo next to the video | none | yes | yes | no |
+
+The model is `llama-server` from llama.cpp, bound to 127.0.0.1. It is started
+when a job needs it and stopped again when it goes idle. Point it at a model
+with `REFINE_MODEL_DIR` (default `~/models`); `Qwen3.5-0.8B` Q4_K_M is enough.
 
 ## File and folder layouts
 
