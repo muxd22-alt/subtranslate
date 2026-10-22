@@ -121,7 +121,7 @@ export class LlamaServer {
             process.stderr.write(`subqwen: starting ${path.basename(this.model)} ${flags.join(' ')}\n`);
 
             const out = fs.openSync(this.logFile, 'a');
-            this.process = spawn(argv, {
+            this.process = spawn(argv[0], argv.slice(1), {
                 detached: true,
                 stdio: ['ignore', out, out],
             });

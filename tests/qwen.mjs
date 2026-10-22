@@ -324,6 +324,7 @@ function withStage(fn) {
         refinedDir: config.refinedDir,
         reportDir: config.reportDir,
         serverUrl: config.serverUrl,
+        modelDir: config.modelDir,
         tmdbKeyFile: config.tmdbKeyFile,
         glossaryFile: config.glossaryFile,
     };
@@ -465,9 +466,11 @@ await check('stage: a broken answer keeps the raw line', async () => {
 });
 
 await check('stage: a server that is not there changes nothing', async () => {
-    await withStage(async ({ video, base }) => {
+    await withStage(async ({ video, base, tmp }) => {
         const before = fs.readFileSync(`${base}.ar.tran.srt`, 'utf8');
-        config.serverUrl = 'http://127.0.0.1:1';
+        // No model dir, so nothing can be started to answer the request,
+        // on a computer as well as on a phone that has llama-server.
+        config.modelDir = path.join(tmp, 'no-models');
         const result = await refineOne(video, { allowNetwork: false });
         assert.equal(fs.readFileSync(`${base}.ar.tran.srt`, 'utf8'), before);
         assert.equal(result.status, 'no-model');
