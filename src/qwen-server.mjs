@@ -109,7 +109,7 @@ export class LlamaServer {
             return false;
         }
 
-        fs.mkdirSync(path.dirname(this.logFile), exist_ok=True);
+        fs.mkdirSync(path.dirname(this.logFile), { recursive: true });
 
         // The phone shares its battery with everything else, so the model runs
         // at a lower priority than the rest of the stack.
