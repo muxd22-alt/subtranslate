@@ -62,5 +62,5 @@ export const config = {
     // stores it, so an old refinement is redone instead of being trusted.
     promptVersion: process.env.REFINE_PROMPT_VERSION || 'v1',
 
-    watermarkText: process.env.REFINE_WATERMARK || 'SubTranslate',
+    watermarkText: process.env.REFINE_WATERMARK || 'done by SubTranslate',
 };

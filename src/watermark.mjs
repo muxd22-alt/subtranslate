@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import { parseSrt, serializeSrt } from './srt.mjs';
 import { writeAtomic } from './atomic.mjs';
 
-export const DEFAULT_WATERMARK = 'SubTranslate';
+export const DEFAULT_WATERMARK = 'done by SubTranslate';
 export const WATERMARK_TIMING = '00:00:00,000 --> 00:00:04,000';
 
 /**
