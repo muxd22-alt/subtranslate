@@ -266,31 +266,26 @@ export async function refineOne(video, options = {}) {
         return result;
     }
 
-    // The raw Bergamot output is the fallback for every single cue, so it has
+    // The raw translation is the fallback for every single cue, so a copy has
     // to exist before anything is written.
     ensureDir(config.rawDir);
-    if (!fs.existsSync(rawFile)) {
-        const sidecar = readJson(sidecarFile);
-        if (sidecar && sidecar.refined) {
-            result.reason = 'already refined and the raw copy is gone';
-            return result;
-        }
-        try {
-            fs.copyFileSync(target, rawFile);
-        } catch (err) {
-            result.reason = `could not keep the raw copy: ${err.message}`;
-            return result;
-        }
-    }
-
-    const rawSha = sha256File(rawFile);
+    const inputSha = sha256File(target);
     const sidecar = readJson(sidecarFile);
-    if (!force && sidecar && sidecar.promptVersion === config.promptVersion && sidecar.rawSha === rawSha) {
+    if (!force && sidecar && sidecar.promptVersion === config.promptVersion && sidecar.outSha === inputSha) {
         result.status = 'already-refined';
         result.reason = 'the sidecar matches';
         result.changed = sidecar.changed || 0;
         result.cues = sidecar.cues || 0;
         result.model = sidecar.model || '';
+        return result;
+    }
+
+    // The file changed since the last refinement, so it is a fresh
+    // translation and the fallback copy is refreshed with it.
+    try {
+        fs.copyFileSync(target, rawFile);
+    } catch (err) {
+        result.reason = `could not keep the raw copy: ${err.message}`;
         return result;
     }
 
@@ -385,7 +380,8 @@ export async function refineOne(video, options = {}) {
         promptVersion: config.promptVersion,
         brief: brief.provider,
         briefId: brief.id,
-        rawSha,
+        inputSha,
+        rawSha: sha256File(rawFile),
         outSha: sha256File(target),
         cues: arabicCues.length,
         sent: outcome.sent,

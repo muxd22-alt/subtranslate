@@ -63,12 +63,18 @@ export function serverFlagSets() {
 }
 
 async function isUp(url = config.serverUrl) {
-    try {
-        const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) });
-        return response.ok;
-    } catch {
-        return false;
+    // A pooled connection to a server that just went away fails once, so the
+    // check is retried before it is believed.
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) });
+            if (response.ok) return true;
+        } catch {
+            // Try again.
+        }
+        await sleep(300);
     }
+    return false;
 }
 
 export class LlamaServer {
