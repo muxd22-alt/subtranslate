@@ -82,10 +82,35 @@ Knobs (environment or `~/.config/subgrab/refine.conf`):
 |---|---|---|
 | STEP2 | on | on/off |
 | STEP2_MODE | weak | weak or full |
-| WEAK_PCT | 30 | percentage treated as weak |
+| STEP2_SCORE | chrf | `chrf` (back-translation) or `gate` |
+| WEAK_PCT | 10 | percentage treated as weak |
 | QUICKMT_PORT | 8098 | service port |
 | QUICKMT_THREADS | 4 | intra-op threads |
-| QUICKMT_BEAM | 4 | beam size |
+| QUICKMT_BEAM | 2 | beam size |
+
+### Speed
+
+Measured on a Galaxy Z Fold 4 (8 GB, Android, Termux), 150-cue sample:
+
+| | |
+|---|---|
+| cues sent to quickmt | 20 of 150 |
+| 2a translate | 27 s |
+| 2c scoring | 2.4 s |
+| step 2 total | 31 s |
+| changes / chrF vs human | 3 / +0.0003 |
+
+Two things make that possible without changing the decisions:
+
+- the Bergamot line is judged with every Latin token the English source
+  already contains, so a name like `YTS` no longer marks a cue as broken;
+- the gate runs before the scoring pass, and structural wins (fewer lines, a
+  broken Bergamot line) are kept without back-translating them. Scoring then
+  uses beam 1, because chrF only ranks two candidates.
+
+CTranslate2 on Android aarch64 supports only `float32`/`auto`; `int8`,
+`int8_float32`, `float16` and `bfloat16` are rejected by the backend, so the
+remaining cost is the model itself (~0.5-1 s/line).
 
 Models: `quickmt/quickmt-en-ar` and `quickmt/quickmt-ar-en`, by **quickmt**,
 licensed **CC-BY-4.0**. They live in

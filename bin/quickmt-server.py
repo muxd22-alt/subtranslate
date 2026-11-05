@@ -106,7 +106,7 @@ class Model:
                     beam_size=beam,
                     max_batch_size=32,
                     batch_type="examples",
-                    max_decoding_length=512,
+                    max_decoding_length=256,
                     replace_unknowns=True,
                 )
             out.extend(self.target.decode(r.hypotheses[0]) for r in results)

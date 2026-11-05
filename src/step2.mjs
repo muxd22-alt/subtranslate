@@ -21,7 +21,8 @@ import { healthy, translate, back } from './quickmt.mjs';
 
 const SENTENCE_END = /[.!?…]["')\]]*\s*$/;
 const CONTINUES = /^[\s"'(\[]*[a-z0-9]/;
-const MAX_GROUP = 6;
+const MAX_GROUP = 2;
+const MAX_SENTENCE_CHARS = 160;
 const MAX_LINE = 42;
 
 const STOP = new Set([
@@ -57,7 +58,8 @@ export function mergeCues(cues) {
         const canMerge = !SENTENCE_END.test(prev)
             && (CONTINUES.test(text) || /[,;:–—-]\s*$/.test(prev));
 
-        if (canMerge && current.texts.length < MAX_GROUP) {
+        const joined = current.texts.join(' ').length + text.length + 1;
+        if (canMerge && current.texts.length < MAX_GROUP && joined <= MAX_SENTENCE_CHARS) {
             current.idx.push(i);
             current.texts.push(text);
         } else {
@@ -204,7 +206,11 @@ function arabicRatio(english, arabic) {
     return ar / en;
 }
 
-const GATE = { maxLineChars: 45, maxTotalChars: 95, minArabicRatio: 0.5 };
+// The Bergamot line is judged by the normal subtitle budget; the quickmt line
+// has to fit the tighter step-2 budget. Using the tight budget for both made
+// almost every normal Bergamot line look "weak".
+const GATE_RAW = { maxLineChars: 60, maxTotalChars: 120, minArabicRatio: 0.5 };
+const GATE = { maxLineChars: 60, maxTotalChars: 120, minArabicRatio: 0.5 };
 
 /**
  * Run step 2 over a translated document in place.
@@ -221,11 +227,23 @@ export async function runStep2(doc, sourceDoc, { terms = {}, log = console } = {
 
     const mode = String(process.env.STEP2_MODE || 'weak').toLowerCase() === 'full' ? 'full' : 'weak';
     const weakPct = Math.max(1, Math.min(100, Number(process.env.WEAK_PCT || 10)));
-    const beam = Math.max(1, Math.min(10, Number(process.env.QUICKMT_BEAM || 4)));
-    const scoreMode = String(process.env.STEP2_SCORE || 'gate').toLowerCase() === 'chrf' ? 'chrf' : 'gate';
+    const beam = Math.max(1, Math.min(10, Number(process.env.QUICKMT_BEAM || 2)));
+    const scoreMode = String(process.env.STEP2_SCORE || 'chrf').toLowerCase() === 'gate' ? 'gate' : 'chrf';
 
     // Judge the Bergamot draft first, so only the groups that hold a weak cue
     // are sent to quickmt. Translating every sentence would blow the budget.
+    // Names must be allowed here too, or every line with "FBI" or "YTS" looks
+    // broken and 40% of the film gets translated for nothing.
+    const names = collectNames(sourceDoc.cues.map(cueText));
+    // A Latin word in the Arabic line is only a translation failure if the
+    // English source never had it. This covers acronyms at sentence start
+    // ("YTS", "FBI") that collectNames deliberately skips.
+    const sourceLatin = new Set();
+    for (const cue of sourceDoc.cues) {
+        for (const word of cueText(cue).match(/[A-Za-z][A-Za-z'.-]*/g) || []) {
+            sourceLatin.add(word.toLowerCase());
+        }
+    }
     const rowsAll = [];
     sourceDoc.cues.forEach((cue, i) => {
         const english = cueText(cue).replace(/\s+/g, ' ').trim();
@@ -237,7 +255,7 @@ export async function runStep2(doc, sourceDoc, { terms = {}, log = console } = {
             english,
             raw,
             weakness: arabicRatio(english, raw),
-            rawOk: checkCue(raw, raw, new Set(), GATE).ok,
+            rawOk: checkCue(raw, raw, sourceLatin, GATE_RAW).ok,
         });
     });
 
@@ -255,14 +273,13 @@ export async function runStep2(doc, sourceDoc, { terms = {}, log = console } = {
         .filter(g => isTranslatable(g.texts.join(' ')))
         .filter(g => g.idx.some(i => selected.has(i)));
 
-    const names = collectNames(sourceDoc.cues.map(cueText));
     const allowed = new Set();
     const candidates = new Map();
     let dropped = 0;
     const tTranslate = Date.now();
 
-    for (let start = 0; start < groups.length; start += 16) {
-        const slice = groups.slice(start, start + 16);
+    for (let start = 0; start < groups.length; start += 32) {
+        const slice = groups.slice(start, start + 32);
         const prepared = slice.map(g => {
             const english = g.texts.join(' ');
             return { ...g, english, ...maskNames(english, names, terms) };
@@ -289,19 +306,32 @@ export async function runStep2(doc, sourceDoc, { terms = {}, log = console } = {
         .filter(row => selected.has(row.i) && candidates.has(row.i))
         .map(row => ({ ...row, quick: candidates.get(row.i).join('\n') }));
 
+    // Gate first: a line that cannot be kept is not worth scoring, and a
+    // structural fix is kept without spending a back-translation pass on it.
+    const keepIdx = new Set();
+    const toScore = [];
+    chosen.forEach((row, k) => {
+        const gate = checkCue(row.raw, row.quick, allowed, GATE);
+        if (!gate.ok) return;
+        const fewerLines = row.quick.split('\n').length < row.raw.split('\n').length;
+        if (fewerLines || !row.rawOk) { keepIdx.add(k); return; }
+        if (scoreMode === 'chrf') toScore.push(k);
+    });
+
     let backOk = false;
     let rawScore = null;
     let quickScore = null;
     const tScore = Date.now();
 
-    if (chosen.length && scoreMode === 'chrf') {
+    if (toScore.length) {
         try {
+            // Scoring does not need a wide beam; greedy keeps the ranking.
             const [bRaw, bQuick] = await Promise.all([
-                backAll(chosen.map(r => r.raw), beam),
-                backAll(chosen.map(r => r.quick), beam),
+                backAll(toScore.map(k => chosen[k].raw), 1),
+                backAll(toScore.map(k => chosen[k].quick), 1),
             ]);
-            rawScore = bRaw.map((t, k) => chrf(t, chosen[k].english));
-            quickScore = bQuick.map((t, k) => chrf(t, chosen[k].english));
+            rawScore = bRaw.map((t, j) => chrf(t, chosen[toScore[j]].english));
+            quickScore = bQuick.map((t, j) => chrf(t, chosen[toScore[j]].english));
             backOk = true;
         } catch (err) {
             log.warn(`step2: back-translation unavailable (${err.message}); using the gate only`);
@@ -309,16 +339,18 @@ export async function runStep2(doc, sourceDoc, { terms = {}, log = console } = {
     }
 
     let changed = 0;
-    chosen.forEach((row, k) => {
-        const gate = checkCue(row.raw, row.quick, allowed, GATE);
-        if (!gate.ok) return;
-        const keep = backOk
-            ? quickScore[k] > rawScore[k] + 0.005
-            : !row.rawOk;
-        if (!keep) return;
-        doc.cues[row.i].lines = candidates.get(row.i);
+    for (const k of keepIdx) {
+        doc.cues[chosen[k].i].lines = candidates.get(chosen[k].i);
         changed++;
-    });
+    }
+    if (backOk) {
+        toScore.forEach((k, j) => {
+            if (quickScore[j] > rawScore[j]) {
+                doc.cues[chosen[k].i].lines = candidates.get(chosen[k].i);
+                changed++;
+            }
+        });
+    }
 
     const scoreMs = Date.now() - tScore;
     const stats = {
