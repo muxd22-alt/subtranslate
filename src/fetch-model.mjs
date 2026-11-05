@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { Readable } from 'node:stream';
 import { MODEL_FILES } from './engine.mjs';
 
 const RECORDS_URL = 'https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records';
@@ -19,17 +20,19 @@ async function download(url, dest, { log }) {
     const tmp = `${dest}.part`;
     const hash = crypto.createHash('sha256');
     const out = fs.createWriteStream(tmp);
+    // Node 18+ global fetch returns a web ReadableStream, which has no .on().
+    const body = res.body ? Readable.fromWeb(res.body) : Readable.from([]);
 
     await new Promise((accept, reject) => {
-        res.body.on('error', reject);
+        body.on('error', reject);
         out.on('error', reject);
         out.on('finish', accept);
-        res.body.on('data', chunk => {
+        body.on('data', chunk => {
             hash.update(chunk);
-            if (!out.write(chunk)) res.body.pause();
+            if (!out.write(chunk)) body.pause();
         });
-        out.on('drain', () => res.body.resume());
-        res.body.on('end', () => out.end());
+        out.on('drain', () => body.resume());
+        body.on('end', () => out.end());
     });
 
     fs.renameSync(tmp, dest);
