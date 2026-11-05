@@ -13,3 +13,6 @@ cmp.mjs
 cmp2.mjs
 testdata/
 tests/.tmp/
+
+# marker written by termux-media-stack when vendoring this repo
+.upstream-commit
