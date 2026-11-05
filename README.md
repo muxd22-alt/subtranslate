@@ -59,6 +59,38 @@ npm install -g subtranslate
 
 `subtranslate --help` prints the same table.
 
+## quickmt: step 2 (no LLM)
+
+Step 2 is the lighter second pass. It merges cues that split a sentence,
+translates the whole sentence with
+[quickmt](https://huggingface.co/quickmt/quickmt-en-ar), splits the Arabic back
+across the same cues, and keeps a line only when a back-translation scores it
+higher than the Bergamot line. Cue numbers and timings never change.
+
+It uses the local service in `bin/quickmt-server.py` (CTranslate2 +
+SentencePiece) on `127.0.0.1:8098`. If the service is down, step 2 is skipped
+and the Bergamot lines stay.
+
+```sh
+python3 bin/quickmt-server.py --check   # load, translate 3 lines, print timings
+python3 bin/quickmt-server.py           # serve on 127.0.0.1:8098
+```
+
+Knobs (environment or `~/.config/subgrab/refine.conf`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| STEP2 | on | on/off |
+| STEP2_MODE | weak | weak or full |
+| WEAK_PCT | 30 | percentage treated as weak |
+| QUICKMT_PORT | 8098 | service port |
+| QUICKMT_THREADS | 4 | intra-op threads |
+| QUICKMT_BEAM | 4 | beam size |
+
+Models: `quickmt/quickmt-en-ar` and `quickmt/quickmt-ar-en`, by **quickmt**,
+licensed **CC-BY-4.0**. They live in
+`~/.local/share/subtranslate/models/quickmt-*` and never leave the device.
+
 ## subqwen: the second pass
 
 The translator is fast and free, but it is a small model: it gets the gender

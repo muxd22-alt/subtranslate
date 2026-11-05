@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "subtranslate",
   "version": "0.2.0",
   "description": "Offline English to Arabic subtitle translation, on device, with subfind/subsync wrappers for a whole library.",
@@ -14,7 +14,9 @@
   "scripts": {
     "postinstall": "node scripts/postinstall.mjs",
     "fetch-model": "node scripts/fetch-model.mjs",
-    "test": "node tests/verify.mjs && node tests/qwen.mjs"
+    "test": "node tests/verify.mjs && node tests/qwen.mjs && node tests/step2.mjs",
+    "quickmt": "python3 bin/quickmt-server.py",
+    "quickmt-check": "python3 bin/quickmt-server.py --check"
   },
   "dependencies": {
     "@browsermt/bergamot-translator": "^0.4.9"

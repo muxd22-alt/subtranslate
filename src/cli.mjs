@@ -194,6 +194,17 @@ export async function main(argv) {
 
     progress?.finish();
 
+    // Step 2: quickmt rewrites the weak lines. Optional and never fatal: if
+    // the service is down or the model is missing, the Bergamot draft stays.
+    if (String(process.env.STEP2 || 'on').toLowerCase() !== 'off') {
+        try {
+            const { runStep2 } = await import('./step2.mjs');
+            await runStep2(doc, sourceDoc, { terms, log });
+        } catch (err) {
+            log.warn(`step2 skipped: ${err.message}`);
+        }
+    }
+
     if (stats.kept) {
         log.warn(`title="${title}" ${stats.kept} cue(s) could not be translated and were left in English`);
     }

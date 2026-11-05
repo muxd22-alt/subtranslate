@@ -148,7 +148,7 @@ export function checkCue(raw, candidate, allowedLatin = new Set(), options = {})
         return { ok: false, reason: `left over Latin: ${leftover.slice(0, 3).join(', ')}` };
     }
 
-    const limit = Math.min(rawLines.length, 2);
+    const limit = options.maxLines ?? Math.min(rawLines.length, 2);
     if (newLines.length > limit) {
         return { ok: false, reason: `${newLines.length} lines, allowed ${limit}` };
     }
